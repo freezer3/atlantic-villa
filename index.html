@@ -2563,7 +2563,7 @@
         <div class="location-grid" style="margin-top: 2rem">
           <div>
             <a
-              href="https://maps.app.goo.gl/pfVPDSiAPrYtytdr7"
+              href="https://www.google.com/maps/search/?api=1&amp;query=28.227115,-16.841604"
               target="_blank"
               rel="noopener"
               class="location-map"
@@ -2571,7 +2571,7 @@
               <img
                 loading="lazy"
                 decoding="async"
-                src="images/location/Location of the house.png"
+                src="images/location/location-map.avif"
                 alt="Map showing Villa Atlantic location in Puerto de Santiago, Tenerife"
                 data-alt-en="Map showing Villa Atlantic location in Puerto de Santiago, Tenerife"
                 data-alt-pl="Mapa pokazująca lokalizację Villa Atlantic w Puerto de Santiago na Teneryfie"
@@ -4235,7 +4235,7 @@
           }
         });
         document
-          .querySelectorAll('a.location-map, a[href*="maps.app.goo.gl"]')
+          .querySelectorAll('a.location-map, a[href*="google.com/maps"]')
           .forEach(function (a) {
             a.addEventListener('click', function () {
               track('contact_click', { method: 'maps' });
