@@ -95,7 +95,7 @@ Zmień tekst, zapisz, wgraj zmiany na serwer (patrz: deploy).
 
 ## Deploy na GitHub Pages
 
-Repo: `freezer3/villa-atlantic`. Domena: **`atlanticvilla.net`** (taka jest kolejność słów — nie `villaatlantic.net`).
+Repo: `freezer3/atlantic-villa`. Domena: **`atlanticvilla.net`** (taka jest kolejność słów — nie `villaatlantic.net`).
 
 Każda aktualizacja = commit + push do `main`. Strona odświeża się automatycznie w ~1 minutę. Nie ma kroku budowania.
 
@@ -124,7 +124,7 @@ Powód: 2026-08-02 ktoś wyłączył Pages w ustawieniach repo. DNS, TLS, saniti
 ## Struktura plików
 
 ```
-villa-atlantic/
+atlantic-villa/
 ├── index.html              ← jedyny plik strony (HTML + CSS + JS w jednym)
 ├── README.md               ← ten plik
 ├── images/
