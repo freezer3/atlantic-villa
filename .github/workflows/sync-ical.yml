@@ -160,9 +160,9 @@ jobs:
       # Airbnb / Booking.com <-> Google Calendar (scripts/channel_sync.py).
       # Runs after the website feeds so a Google API outage can never stop the
       # site sync; its new events reach the site feed on the next run. It also
-      # runs when the site step failed, so Google keeps getting platform bookings.
-      # A broken feed fails the run (step below) but healthy listings and the
-      # mirrors are still committed; a crash commits nothing from this step.
+      # runs when the site step failed. A broken feed fails the run (step below)
+      # but healthy listings and the mirrors are still committed; a crash leaves
+      # the mirror files unchanged.
       - name: Sync Airbnb / Booking with Google Calendar
         id: channels
         if: always()
@@ -176,7 +176,11 @@ jobs:
           pip install --quiet google-auth==2.62.1 requests==2.34.2
           python3 scripts/channel_sync.py
 
+      # always(): also after a failed site step, so the mirrors from the step
+      # above still reach Airbnb/Booking. Scratch files are gitignored and every
+      # site feed that got this far already passed its wipe guard.
       - name: Commit if changed
+        if: always()
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

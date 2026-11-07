@@ -13,7 +13,7 @@ every booking lives. Each run:
    reservations. Airbnb / Booking import these files (served by GitHub Pages at
    https://atlanticvilla.net/ical/mirror/<listing>.ics) and close those dates.
 
-Safety rules (each one has a test in tests/test_channel_sync.py):
+Safety rules (tests in tests/test_channel_sync.py):
 
 - A feed that fails to download, is not iCal, or suddenly goes from >= 2 synced
   reservations to 0 is skipped: its existing events stay in Google and stay
@@ -24,11 +24,12 @@ Safety rules (each one has a test in tests/test_channel_sync.py):
   available)" covers prep time, advance notice and dates Airbnb closed because
   of an imported calendar; syncing those back would loop.
 - Booking.com exports everything as "CLOSED - Not available", reservations and
-  closures alike. An event whose nights are all inside what we already serve
-  to that listing is our own block echoed back and is skipped. Anything else
-  is synced (block first). A late echo after a cancellation heals itself: the
-  listing's own events are never mirrored back to it, so the echo disappears
-  from its export on the next import and the event is deleted.
+  closures alike, so every closed night is synced (block first). No echo
+  filter: nights we cannot tell apart from a reservation (a hand copy of a
+  Booking stay covers the same nights) must not be dropped. If Booking does
+  re-export our imported blocks, the copy is harmless and heals itself: a
+  listing's own events are never mirrored back to it, so once the source is
+  gone the block leaves Booking's export and the event is deleted.
 - Checkout day: platform DTEND is the checkout day. Google events are written
   with end = checkout + 1 to match how bookings are entered by hand
   (README: "data końcowa to dzień wymeldowania"), so sanitize_ical's one-day
@@ -80,11 +81,6 @@ API = "https://www.googleapis.com/calendar/v3/calendars"
 Range = tuple[dt.date, dt.date]  # (check-in, checkout), checkout exclusive
 
 
-def nights(rng: Range) -> set[dt.date]:
-    start, checkout = rng
-    return {start + i * DAY for i in range((checkout - start).days)}
-
-
 def ical_range(ev: dict) -> Range | None:
     """(start, checkout) of a parsed all-day iCal event, None if it is timed."""
     if ev["start"] and ev["end"] and len(ev["start"]) == len(ev["end"]) == 10:
@@ -92,12 +88,7 @@ def ical_range(ev: dict) -> Range | None:
     return None
 
 
-def parse_ranges(text: str) -> list[Range]:
-    """(start, checkout) of every all-day event in an iCal text (mirror files)."""
-    return [rng for ev in parse_events(text).values() if (rng := ical_range(ev))]
-
-
-def reservations(listing: str, text: str, served: set[dt.date], today: dt.date) -> set[Range]:
+def reservations(listing: str, text: str, today: dt.date) -> set[Range]:
     """Current and future reservations in a platform export. Raises ValueError
     on anything that does not look like a sane feed, so the caller keeps the
     last-good state instead of deleting bookings."""
@@ -116,8 +107,6 @@ def reservations(listing: str, text: str, served: set[dt.date], today: dt.date) 
             raise ValueError(f"unexpected non all-day event {ev['start']} -> {ev['end']}")
         if rng[1] <= today or rng[1] <= rng[0]:
             continue
-        if platform == "Booking" and nights(rng) <= served:
-            continue  # our own mirror block echoed back by Booking
         out.add(rng)
     return out
 
@@ -184,7 +173,6 @@ def mirror_ics(ranges: list[Range]) -> str:
 def plan(
     feeds: dict[str, str | Exception],
     existing: dict[str, list[dict]],
-    served: dict[str, set[dt.date]],
     today: dt.date,
 ):
     """Pure core. feeds: listing -> export text, or the fetch exception
@@ -198,7 +186,7 @@ def plan(
         try:
             if isinstance(text, Exception):
                 raise ValueError(f"download failed: {text}")
-            res = reservations(listing, text, served.get(listing, set()), today)
+            res = reservations(listing, text, today)
             synced = {
                 rng
                 for u in units
@@ -235,9 +223,7 @@ def plan(
                     busy[unit].append((rng, listing))
 
     mirrors = {
-        listing: mirror_ics(
-            [rng for u in units for rng, src in busy[u] if src != listing and rng[1] > today]
-        )
+        listing: mirror_ics([rng for u in units for rng, src in busy[u] if src != listing])
         for listing, (_, _, units) in LISTINGS.items()
     }
     return inserts, deletes, mirrors, status
@@ -263,8 +249,10 @@ def _fetch(url: str) -> str | Exception:
         req = urllib.request.Request(url, headers={"User-Agent": "villa-atlantic-sync/1.0"})
         with urllib.request.urlopen(req, timeout=30) as resp:
             return resp.read().decode("utf-8", "replace")
-    except Exception as err:  # reported per listing, never silently
-        return err
+    except Exception as err:  # reported per listing; never echo err: it can contain the token
+        return OSError(
+            " ".join(str(x) for x in (type(err).__name__, getattr(err, "code", "")) if x)
+        )
 
 
 def main(argv: list[str]) -> int:
@@ -287,13 +275,7 @@ def main(argv: list[str]) -> int:
     existing = {apt: _list_events(session, cal, today) for apt, cal in CALENDARS.items()}
     urls = json.loads(os.environ.get("CHANNEL_ICAL_URLS") or "{}")
     feeds = {name: _fetch(urls[name]) for name in LISTINGS if urls.get(name)}
-    served = {}
-    for name in LISTINGS:
-        path = MIRROR_DIR / f"{name}.ics"
-        if path.exists():
-            served[name] = set().union(*map(nights, parse_ranges(path.read_text())))
-
-    inserts, deletes, mirrors, status = plan(feeds, existing, served, today)
+    inserts, deletes, mirrors, status = plan(feeds, existing, today)
     for apt, body in inserts:
         print(f"+ {apt}: {body['summary']} {body['start']['date']} -> {body['end']['date']}")
     for apt, ev_id in deletes:

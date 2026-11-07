@@ -3,7 +3,8 @@
 import datetime as dt
 
 import pytest
-from channel_sync import TAG, gcal_range, mirror_ics, parse_ranges, plan, reservations
+from channel_sync import TAG, gcal_range, ical_range, mirror_ics, plan, reservations
+from sanitize_ical import parse_events
 
 TODAY = dt.date(2026, 11, 7)
 D = dt.date.fromisoformat
@@ -16,6 +17,10 @@ def feed(*events):
         for i, (s, e, summary) in enumerate(events)
     )
     return f"BEGIN:VCALENDAR\r\nVERSION:2.0\r\n{body}END:VCALENDAR\r\n"
+
+
+def parse_ranges(text):
+    return [ical_range(ev) for ev in parse_events(text).values()]
 
 
 def gev(ev_id, start, end_exclusive, listing=None):
@@ -31,18 +36,31 @@ def test_airbnb_keeps_only_reserved_and_future():
         ("20261201", "20261203", "Airbnb (Not available)"),
         ("20261001", "20261005", "Reserved"),  # past
     )
-    assert reservations("airbnb-cliffs", text, set(), TODAY) == {(D("2026-11-20"), D("2026-11-25"))}
+    assert reservations("airbnb-cliffs", text, TODAY) == {(D("2026-11-20"), D("2026-11-25"))}
 
 
-def test_booking_skips_echo_of_served_block_but_keeps_real_booking():
-    served = {D("2026-11-20") + dt.timedelta(days=i) for i in range(5)}
-    text = feed(
-        ("20261121", "20261124", "CLOSED - Not available"),  # inside our block: echo
-        ("20261124", "20261128", "CLOSED - Not available"),  # sticks out: real
-    )
-    assert reservations("booking-cliffs", text, served, TODAY) == {
-        (D("2026-11-24"), D("2026-11-28"))
+def test_booking_stay_copied_by_hand_is_still_synced():
+    # Mama's hand copy is in the Booking mirror; the real Booking stay on the same nights
+    # must still reach Google, or a cancellation would leave the copy blocking forever.
+    existing = {"cliffs": [gev("hand", "2026-11-20", "2026-11-26")], "gardens": []}
+    feeds = {"booking-cliffs": feed(("20261120", "20261125", "CLOSED - Not available"))}
+    inserts, _, mirrors, _ = plan(feeds, existing, TODAY)
+    assert [gcal_range(b) for _, b in inserts] == [(D("2026-11-20"), D("2026-11-25"))]
+    assert parse_ranges(mirrors["booking-cliffs"]) == [(D("2026-11-20"), D("2026-11-25"))]
+
+
+def test_booking_echo_of_airbnb_block_heals_after_cancellation():
+    # Booking re-exports our Airbnb block; once Airbnb cancels, the echo is not served
+    # back to Booking, so Booking stops exporting it and the next run deletes it.
+    existing = {
+        "cliffs": [gev("echo", "2026-11-20", "2026-11-26", "booking-cliffs")],
+        "gardens": [],
     }
+    _, _, mirrors, _ = plan({"airbnb-cliffs": feed()}, existing, TODAY)
+    assert parse_ranges(mirrors["booking-cliffs"]) == []
+    assert parse_ranges(mirrors["airbnb-cliffs"]) == [(D("2026-11-20"), D("2026-11-25"))]
+    _, deletes, _, _ = plan({"booking-cliffs": feed()}, existing, TODAY)
+    assert deletes == [("cliffs", "echo")]
 
 
 @pytest.mark.parametrize(
@@ -50,7 +68,7 @@ def test_booking_skips_echo_of_served_block_but_keeps_real_booking():
 )
 def test_bad_feed_raises(text):
     with pytest.raises(ValueError):
-        reservations("airbnb-cliffs", text, set(), TODAY)
+        reservations("airbnb-cliffs", text, TODAY)
 
 
 def test_checkout_convention_round_trip():
@@ -58,7 +76,6 @@ def test_checkout_convention_round_trip():
     inserts, _, _, _ = plan(
         {"airbnb-cliffs": feed(("20261120", "20261125", "Reserved"))},
         {"cliffs": [], "gardens": []},
-        {},
         TODAY,
     )
     ((apt, body),) = inserts
@@ -70,7 +87,6 @@ def test_villa_listing_writes_both_and_blocks_apartment_listings():
     inserts, _, mirrors, status = plan(
         {"airbnb-villa": feed(("20261120", "20261125", "Reserved"))},
         {"cliffs": [], "gardens": []},
-        {},
         TODAY,
     )
     assert sorted(a for a, _ in inserts) == ["cliffs", "gardens"]
@@ -85,7 +101,7 @@ def test_apartment_booking_blocks_villa_listing_and_merges_with_manual():
         "gardens": [gev("s1", "2026-11-15", "2026-11-19", "booking-gardens")],
     }
     feeds = {"booking-gardens": feed(("20261115", "20261118", "CLOSED - Not available"))}
-    inserts, deletes, mirrors, _ = plan(feeds, existing, {}, TODAY)
+    inserts, deletes, mirrors, _ = plan(feeds, existing, TODAY)
     assert inserts == [] and deletes == []
     assert parse_ranges(mirrors["airbnb-villa"]) == [(D("2026-11-10"), D("2026-11-18"))]
     assert parse_ranges(mirrors["booking-gardens"]) == []
@@ -102,7 +118,7 @@ def test_cancel_deletes_only_synced_events_and_duplicates():
         "gardens": [],
     }
     feeds = {"airbnb-cliffs": feed(("20261120", "20261125", "Reserved"))}
-    _, deletes, _, _ = plan(feeds, existing, {}, TODAY)
+    _, deletes, _, _ = plan(feeds, existing, TODAY)
     assert sorted(i for _, i in deletes) == ["dup", "gone"]
 
 
@@ -115,7 +131,7 @@ def test_failed_or_wiped_feed_keeps_events_and_blocks(bad):
         ],
         "gardens": [],
     }
-    inserts, deletes, mirrors, status = plan({"airbnb-cliffs": bad}, existing, {}, TODAY)
+    inserts, deletes, mirrors, status = plan({"airbnb-cliffs": bad}, existing, TODAY)
     assert inserts == [] and deletes == []
     assert status["airbnb-cliffs"] != "ok"
     assert len(parse_ranges(mirrors["booking-cliffs"])) == 2
@@ -123,7 +139,7 @@ def test_failed_or_wiped_feed_keeps_events_and_blocks(bad):
 
 def test_single_checkout_is_not_a_wipe():
     existing = {"cliffs": [gev("a", "2026-11-20", "2026-11-26", "airbnb-cliffs")], "gardens": []}
-    _, deletes, _, status = plan({"airbnb-cliffs": feed()}, existing, {}, TODAY)
+    _, deletes, _, status = plan({"airbnb-cliffs": feed()}, existing, TODAY)
     assert deletes == [("cliffs", "a")] and status == {"airbnb-cliffs": "ok"}
 
 
@@ -147,5 +163,5 @@ def test_checkout_day_keeps_event_and_does_not_count_for_wipe():
         ],
         "gardens": [],
     }
-    _, deletes, _, status = plan({"airbnb-cliffs": feed()}, existing, {}, today)
+    _, deletes, _, status = plan({"airbnb-cliffs": feed()}, existing, today)
     assert deletes == [("cliffs", "cancelled")] and status == {"airbnb-cliffs": "ok"}
