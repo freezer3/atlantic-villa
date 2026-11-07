@@ -25,7 +25,11 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
+      # ref: main, not the trigger SHA: a run held by `concurrency` must start
+      # from the commit the previous run pushed, or its own push is rejected.
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Fetch, guard, sanitize, log
         id: sync

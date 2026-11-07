@@ -49,8 +49,6 @@ w kalendarzu jako "Airbnb · Cliffs", "Booking · Gardens", "Airbnb · cała wil
 - W tytule i opisie takiego wpisu możesz dopisać, co chcesz (np. imię gościa). Gdy gość zmieni
   daty na platformie, wpis zostaje zastąpiony nowym z domyślnym tytułem, więc dopisek trzeba
   powtórzyć.
-- Wpis "Booking · ..." na tych samych datach co inny wpis to kopia (Booking odsyła nasze blokady),
-  zniknie sam.
 - **Nie zmieniaj dat i nie usuwaj go.** Odwołanie albo zmiana dat tylko na Airbnb/Booking,
   kalendarz poprawi się sam. Usunięty wpis wróci przy następnej synchronizacji.
 - Wszystko, co wpiszesz sama (rezerwacja telefoniczna, blokada na remont), w ciągu kilku godzin
