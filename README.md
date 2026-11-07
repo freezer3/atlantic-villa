@@ -41,19 +41,6 @@ Na stronie w widoku "Cała willa":
 
 Dodaj wydarzenie w **obu** kalendarzach (Cliffs + Gardens) na te same daty.
 
-### Rezerwacje z Airbnb i Booking wpisują się same
-
-Rezerwacje z Airbnb i Booking.com **nie są już przepisywane ręcznie**. Co 15 minut pojawiają się
-w kalendarzu jako "Airbnb · Cliffs", "Booking · Gardens", "Airbnb · cała willa" itd.
-
-- W tytule i opisie takiego wpisu możesz dopisać, co chcesz (np. imię gościa). Gdy gość zmieni
-  daty na platformie, wpis zostaje zastąpiony nowym z domyślnym tytułem, więc dopisek trzeba
-  powtórzyć.
-- **Nie zmieniaj dat i nie usuwaj go.** Odwołanie albo zmiana dat tylko na Airbnb/Booking,
-  kalendarz poprawi się sam. Usunięty wpis wróci przy następnej synchronizacji.
-- Wszystko, co wpiszesz sama (rezerwacja telefoniczna, blokada na remont), w ciągu kilku godzin
-  zablokuje te daty na Airbnb i Booking. Na Airbnb i Booking **nic już nie blokuj ręcznie**.
-
 ---
 
 ## Synchronizacja Airbnb / Booking.com (`scripts/channel_sync.py`)

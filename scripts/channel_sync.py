@@ -154,8 +154,12 @@ def merge(ranges: list[Range]) -> list[Range]:
 
 
 def mirror_ics(ranges: list[Range]) -> str:
-    lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Villa Atlantic//channel-sync//EN"]
-    lines.append("CALSCALE:GREGORIAN")
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Villa Atlantic//channel-sync//EN",
+        "CALSCALE:GREGORIAN",
+    ]
     for start, checkout in merge(ranges):
         lines += [
             "BEGIN:VEVENT",
