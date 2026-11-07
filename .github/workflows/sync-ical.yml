@@ -2,6 +2,9 @@ name: Sync iCal feeds
 
 on:
   schedule:
+    # Fallback only: GitHub fires this "hourly" cron every 4-7 h in practice.
+    # The real 15-minute clock is the Cloudflare Worker in trigger/, which
+    # calls workflow_dispatch.
     - cron: '17 * * * *'
   workflow_dispatch:
     inputs:
@@ -12,6 +15,11 @@ on:
 
 permissions:
   contents: write
+
+# Two overlapping runs would both insert the same new Airbnb/Booking event.
+concurrency:
+  group: sync-ical
+  cancel-in-progress: false
 
 jobs:
   sync:
@@ -149,6 +157,23 @@ jobs:
           # .pii_alert.txt / .wipe_alert.txt are left for the trap to read, then
           # discarded with the runner (both are gitignored, never committed).
 
+      # Airbnb / Booking.com <-> Google Calendar (scripts/channel_sync.py).
+      # Runs after the website feeds so a Google API outage can never stop the
+      # site sync; its new events reach the site feed on the next run. A broken
+      # feed or a crash still fails the run (step below), so alert-router.yml
+      # opens its issue. Healthy listings and the mirrors are committed anyway.
+      - name: Sync Airbnb / Booking with Google Calendar
+        id: channels
+        continue-on-error: true
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          # JSON {listing: Airbnb/Booking export URL}; listing names in scripts/channel_sync.py
+          CHANNEL_ICAL_URLS: ${{ secrets.CHANNEL_ICAL_URLS }}
+        run: |
+          set -euo pipefail
+          pip install --quiet google-auth==2.62.1 requests==2.34.2
+          python3 scripts/channel_sync.py
+
       - name: Commit if changed
         run: |
           git config user.name  "github-actions[bot]"
@@ -212,6 +237,12 @@ jobs:
             You will not get an hourly repeat while this leak persists. Once
             you disable the public feed, the alert re-arms; treat any repeat
             email as the leak being open again.
+
+      - name: Fail run if channel sync reported a problem
+        if: always() && steps.channels.outcome == 'failure'
+        run: |
+          echo "::error::Airbnb/Booking sync: a feed is broken or the script crashed; see the 'Sync Airbnb / Booking' step log."
+          exit 1
 
       - name: Fail run if a wipe was blocked
         if: always() && steps.sync.outputs.wipe == '1'
