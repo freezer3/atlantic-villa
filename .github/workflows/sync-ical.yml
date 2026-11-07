@@ -159,11 +159,13 @@ jobs:
 
       # Airbnb / Booking.com <-> Google Calendar (scripts/channel_sync.py).
       # Runs after the website feeds so a Google API outage can never stop the
-      # site sync; its new events reach the site feed on the next run. A broken
-      # feed or a crash still fails the run (step below), so alert-router.yml
-      # opens its issue. Healthy listings and the mirrors are committed anyway.
+      # site sync; its new events reach the site feed on the next run. It also
+      # runs when the site step failed, so Google keeps getting platform bookings.
+      # A broken feed fails the run (step below) but healthy listings and the
+      # mirrors are still committed; a crash commits nothing from this step.
       - name: Sync Airbnb / Booking with Google Calendar
         id: channels
+        if: always()
         continue-on-error: true
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}

@@ -135,3 +135,17 @@ def test_mirror_is_valid_and_deterministic():
     assert (
         ics.count("BEGIN:VEVENT") == 1 and "DTSTAMP:" in ics and "DTEND;VALUE=DATE:20261127" in ics
     )
+
+
+def test_checkout_day_keeps_event_and_does_not_count_for_wipe():
+    # Google still lists an event on its checkout day; the feed no longer has it.
+    today = D("2026-11-25")
+    existing = {
+        "cliffs": [
+            gev("left", "2026-11-20", "2026-11-26", "airbnb-cliffs"),  # checkout today
+            gev("cancelled", "2026-12-01", "2026-12-04", "airbnb-cliffs"),
+        ],
+        "gardens": [],
+    }
+    _, deletes, _, status = plan({"airbnb-cliffs": feed()}, existing, {}, today)
+    assert deletes == [("cliffs", "cancelled")] and status == {"airbnb-cliffs": "ok"}

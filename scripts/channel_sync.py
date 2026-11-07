@@ -85,13 +85,16 @@ def nights(rng: Range) -> set[dt.date]:
     return {start + i * DAY for i in range((checkout - start).days)}
 
 
+def ical_range(ev: dict) -> Range | None:
+    """(start, checkout) of a parsed all-day iCal event, None if it is timed."""
+    if ev["start"] and ev["end"] and len(ev["start"]) == len(ev["end"]) == 10:
+        return dt.date.fromisoformat(ev["start"]), dt.date.fromisoformat(ev["end"])
+    return None
+
+
 def parse_ranges(text: str) -> list[Range]:
     """(start, checkout) of every all-day event in an iCal text (mirror files)."""
-    out = []
-    for ev in parse_events(text).values():
-        if ev["start"] and ev["end"] and len(ev["start"]) == len(ev["end"]) == 10:
-            out.append((dt.date.fromisoformat(ev["start"]), dt.date.fromisoformat(ev["end"])))
-    return out
+    return [rng for ev in parse_events(text).values() if (rng := ical_range(ev))]
 
 
 def reservations(listing: str, text: str, served: set[dt.date], today: dt.date) -> set[Range]:
@@ -108,9 +111,9 @@ def reservations(listing: str, text: str, served: set[dt.date], today: dt.date) 
     for ev in events.values():
         if platform == "Airbnb" and ev.get("summary") != "Reserved":
             continue
-        if not (ev["start"] and ev["end"]) or len(ev["start"]) != 10 or len(ev["end"]) != 10:
+        rng = ical_range(ev)
+        if rng is None:
             raise ValueError(f"unexpected non all-day event {ev['start']} -> {ev['end']}")
-        rng = (dt.date.fromisoformat(ev["start"]), dt.date.fromisoformat(ev["end"]))
         if rng[1] <= today or rng[1] <= rng[0]:
             continue
         if platform == "Booking" and nights(rng) <= served:
@@ -196,8 +199,13 @@ def plan(
             if isinstance(text, Exception):
                 raise ValueError(f"download failed: {text}")
             res = reservations(listing, text, served.get(listing, set()), today)
-            synced = {gcal_range(ev) for u in units for ev in existing[u] if source(ev) == listing}
-            if not res and len(synced - {None}) >= 2:
+            synced = {
+                rng
+                for u in units
+                for ev in existing[u]
+                if source(ev) == listing and (rng := gcal_range(ev)) and rng[1] > today
+            }
+            if not res and len(synced) >= 2:
                 raise ValueError(f"feed went from {len(synced)} reservations to 0; kept them")
         except ValueError as err:
             status[listing] = str(err)
@@ -212,6 +220,8 @@ def plan(
         seen: set[tuple[str, Range]] = set()
         for ev in events:
             listing, rng = source(ev), gcal_range(ev)
+            if rng and rng[1] <= today:
+                continue  # checkout today: no longer in the feed, keep it as history
             if listing in want and (rng not in want[listing] or (listing, rng) in seen):
                 deletes.append((unit, ev["id"]))  # cancelled, moved, or a duplicate
                 continue
@@ -249,8 +259,8 @@ def _list_events(session, cal_id: str, today: dt.date) -> list[dict]:
 
 
 def _fetch(url: str) -> str | Exception:
-    req = urllib.request.Request(url, headers={"User-Agent": "villa-atlantic-sync/1.0"})
-    try:
+    try:  # Request() too: a malformed URL's error text would print the token
+        req = urllib.request.Request(url, headers={"User-Agent": "villa-atlantic-sync/1.0"})
         with urllib.request.urlopen(req, timeout=30) as resp:
             return resp.read().decode("utf-8", "replace")
     except Exception as err:  # reported per listing, never silently

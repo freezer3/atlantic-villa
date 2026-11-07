@@ -46,7 +46,9 @@ Dodaj wydarzenie w **obu** kalendarzach (Cliffs + Gardens) na te same daty.
 Rezerwacje z Airbnb i Booking.com **nie są już przepisywane ręcznie**. Co 15 minut pojawiają się
 w kalendarzu jako "Airbnb · Cliffs", "Booking · Gardens", "Airbnb · cała willa" itd.
 
-- W tytule i opisie takiego wpisu możesz dopisać, co chcesz (np. imię gościa).
+- W tytule i opisie takiego wpisu możesz dopisać, co chcesz (np. imię gościa). Gdy gość zmieni
+  daty na platformie, wpis zostaje zastąpiony nowym z domyślnym tytułem, więc dopisek trzeba
+  powtórzyć.
 - **Nie zmieniaj dat i nie usuwaj go.** Odwołanie albo zmiana dat tylko na Airbnb/Booking,
   kalendarz poprawi się sam. Usunięty wpis wróci przy następnej synchronizacji.
 - Wszystko, co wpiszesz sama (rezerwacja telefoniczna, blokada na remont), w ciągu kilku godzin
@@ -67,7 +69,9 @@ Google Calendar jest jedynym źródłem prawdy. Krok "Sync Airbnb / Booking" w `
    bez rezerwacji z tego samego ogłoszenia. Te linki są zaimportowane w Airbnb i Booking.
 
 Zepsuty feed nic nie kasuje: jego rezerwacje zostają w Google i dalej blokują pozostałe platformy,
-a run kończy się na czerwono (alert przez `alert-router.yml`). Zasady i powody są w docstringu
+a run kończy się na czerwono (alert przez `alert-router.yml`). Ten sam alert przy spadku z >= 2
+rezerwacji do 0. Jeśli to prawda (np. dwa odwołania naraz), usuń w Google wpisy automatyczne tego
+ogłoszenia, wtedy następny przebieg jest zielony. Zasady i powody są w docstringu
 skryptu, każda ma test w `tests/test_channel_sync.py`.
 
 Workflow co 15 minut odpala Cloudflare Worker z katalogu `trigger/` (cron GitHuba w praktyce
