@@ -77,6 +77,9 @@ def sanitize(src: str) -> str:
     Pure function, deterministic, no I/O."""
     src = unfold(src).replace("\r\n", "\n")
     out: list[str] = []
+    # Events are emitted in sorted order: Google reorders VEVENTs between
+    # fetches, which made nearly every sync a commit with no real change.
+    events: list[list[str]] = []
     in_event = False
     ev: list[str] = []
     for line in src.split("\n"):
@@ -95,13 +98,14 @@ def sanitize(src: str) -> str:
                     # It represents no actual overnight stay, so skip it.
                     in_event = False
                     continue
-            out.append("BEGIN:VEVENT")
-            out.extend(shifted_ev)
-            out.append("SUMMARY:Booked")
-            out.append("TRANSP:OPAQUE")
-            out.append("END:VEVENT")
+            events.append(
+                ["BEGIN:VEVENT", *shifted_ev, "SUMMARY:Booked", "TRANSP:OPAQUE", "END:VEVENT"]
+            )
             in_event = False
             continue
+        if line == "END:VCALENDAR":
+            out.extend(ln for ev in sorted(events) for ln in ev)
+            events = []
         key = line.split(":", 1)[0].split(";", 1)[0]
         if in_event:
             if key in KEEP_IN_EVENT:
@@ -118,6 +122,7 @@ def sanitize(src: str) -> str:
             if line == "":
                 continue
             out.append(line)
+    out.extend(ln for ev in sorted(events) for ln in ev)  # feed without END:VCALENDAR
     return "\r\n".join(out) + "\r\n"
 
 

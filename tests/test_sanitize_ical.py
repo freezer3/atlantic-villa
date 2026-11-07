@@ -386,3 +386,18 @@ def test_no_literal_transparent_in_output(fixture):
     """Belt-and-braces companion to test_transp_always_opaque."""
     out = sanitize(_load(fixture))
     assert "TRANSPARENT" not in out
+
+
+def test_event_order_does_not_change_output():
+    """Google reorders VEVENTs between fetches; the published feed must not."""
+
+    def ev(uid, start, end):
+        return (
+            f"BEGIN:VEVENT\r\nDTSTART;VALUE=DATE:{start}\r\nDTEND;VALUE=DATE:{end}\r\n"
+            f"UID:{uid}\r\nEND:VEVENT\r\n"
+        )
+
+    a, b = ev("a@g", "20261120", "20261126"), ev("b@g", "20261201", "20261205")
+    head, tail = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n", "END:VCALENDAR\r\n"
+    assert sanitize(head + a + b + tail) == sanitize(head + b + a + tail)
+    assert sanitize(head + a + b + tail).endswith("END:VEVENT\r\nEND:VCALENDAR\r\n")
