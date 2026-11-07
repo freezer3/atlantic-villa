@@ -140,7 +140,9 @@ def _tzid_param(lhs: str) -> str | None:
 
 def parse_events(text: str) -> dict[str, dict[str, str | None]]:
     """Parse VEVENTs from iCal text into ``{uid: {start, end, created,
-    last_modified, start_tzid, end_tzid}}``.
+    last_modified, start_tzid, end_tzid[, summary]}}`` (``summary`` only when
+    the event has one; channel_sync uses it to tell Airbnb reservations from
+    Airbnb's own "Not available" blocks).
 
     Dates are normalized to ``YYYY-MM-DD`` for date-only values (timed values
     kept raw). ``start_tzid``/``end_tzid`` carry a timed value's TZID (``None``
@@ -200,6 +202,8 @@ def parse_events(text: str) -> dict[str, dict[str, str | None]]:
         elif key == "DTEND":
             cur["end"] = _normalize_date(value)
             cur["end_tzid"] = _tzid_param(lhs)
+        elif key == "SUMMARY":
+            cur["summary"] = value
         elif key == "CREATED":
             cur["created"] = value
         elif key == "LAST-MODIFIED":
