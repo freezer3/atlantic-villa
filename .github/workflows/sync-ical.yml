@@ -61,6 +61,7 @@ jobs:
           SHA_BEFORE="$(git rev-parse --short HEAD)"
           WIPE=0
           PII=0
+          PII_LIVE=0  # any public feed live in THIS run (PII is only the first sighting)
           : > ical/.wipe_alert.txt
           : > ical/.pii_alert.txt
 
@@ -73,6 +74,7 @@ jobs:
             local rc=$?
             echo "wipe=$WIPE" >> "$GITHUB_OUTPUT"
             echo "pii=$PII" >> "$GITHUB_OUTPUT"
+            echo "pii_live=$PII_LIVE" >> "$GITHUB_OUTPUT"
             if [ "$PII" = "1" ]; then
               # Only the calendar names (no feed content) reach the ledger/email.
               { echo 'pii_alert<<EOF_PII'; cat ical/.pii_alert.txt; echo 'EOF_PII'; } >> "$GITHUB_OUTPUT"
@@ -106,6 +108,8 @@ jobs:
             pub="ical/$apt.pubcheck.ics"
             public_http="$(curl -sS -o "$pub" -w '%{http_code}' "${PUBLIC[$apt]}" || true)"
             if [ "$public_http" = "200" ] && grep -q '^BEGIN:VEVENT' "$pub"; then
+              echo "PUBLIC feed for $apt is LIVE (guest names may be exposed)."
+              PII_LIVE=1
               pii_status="$(python3 scripts/log_ical_changes.py --apt "$apt" --pii \
                 --changelog ical/changelog.jsonl --run-url "$RUN_URL" --sha "$SHA_BEFORE")"
               if [ "$pii_status" = "recorded" ]; then
@@ -134,6 +138,7 @@ jobs:
             if [ "$apt" != "${CONFIRM_WIPE_APT:-}" ] \
                && ! guard_out="$(python3 scripts/sync_guard.py "ical/$apt.before.ics" "ical/$apt.candidate.ics")"; then
               echo "WIPE blocked for $apt — keeping last-good live feed."
+              echo "$guard_out"  # vanished dates (no guest data); the alert mail needs secrets
               cp "ical/$apt.candidate.ics" "ical/$apt.suspect.ics"
               # Idempotent: only alert/fail on the transition INTO the wiped
               # state. A persisting wipe keeps the last-good feed unchanged, so
@@ -197,7 +202,7 @@ jobs:
           fi
 
       - name: Email alert on blocked wipe
-        if: always() && steps.sync.outputs.wipe == '1'
+        if: always() && steps.sync.outputs.wipe == '1' && vars.ALERT_EMAIL != ''
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
@@ -211,7 +216,7 @@ jobs:
           body: ${{ steps.sync.outputs.alert }}
 
       - name: Email alert on the public Google Calendar feed being re-enabled
-        if: always() && steps.sync.outputs.pii == '1'
+        if: always() && steps.sync.outputs.pii == '1' && vars.ALERT_EMAIL != ''
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
@@ -248,8 +253,16 @@ jobs:
             you disable the public feed, the alert re-arms; treat any repeat
             email as the leak being open again.
 
+      # Red on every run while the leak is open, so alert-router keeps its issue open
+      # (the mail above needs MAIL_* secrets and ALERT_EMAIL, which the repo lacks).
+      - name: Fail run while a public Google Calendar feed is live
+        if: always() && steps.sync.outputs.pii_live == '1'
+        run: |
+          echo "::error::A public Google Calendar feed is live. In Google Calendar: Settings, the calendar, Access permissions for events, uncheck 'Make available to public'. The calendar is named in the 'PUBLIC feed for ... is LIVE' line of the 'Fetch, guard, sanitize, log' step."
+          exit 1
+
       - name: Fail run if a wipe was blocked
         if: always() && steps.sync.outputs.wipe == '1'
         run: |
-          echo "::error::A calendar wipe was blocked; the live site kept its last-good bookings. See the emailed alert."
+          echo "::error::A calendar wipe was blocked; the live site kept its last-good bookings. See the 'WIPE blocked' lines in the 'Fetch, guard, sanitize, log' step."
           exit 1

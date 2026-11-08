@@ -26,8 +26,8 @@ CLI (used by the sync workflow):
     python3 scripts/sync_guard.py <before.ics> <after.ics>
 
 Exit 0 = safe to publish. Exit 3 = wipe detected, do NOT publish. Exit 2 =
-usage error. On a wipe it prints a human-readable summary to stdout (consumed
-into the alert email).
+usage error. On a wipe it prints a human-readable summary to stdout (printed in the
+sync workflow's run log).
 """
 
 from __future__ import annotations

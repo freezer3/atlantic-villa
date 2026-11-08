@@ -7,9 +7,9 @@ name: Uptime canary
 # served GitHub's 404 for an unknown number of days, because nothing here ever
 # fetched the live origin.
 #
-# The alert is a GitHub issue plus an email over the same SMTP secrets
-# sync-ical.yml already uses, so an outage lands on the channel the calendar
-# alerts already land on. The issue holds the outage state: one open issue
+# The alert is a GitHub issue, plus an email once ALERT_EMAIL and the
+# MAIL_* secrets exist (they do not today; the step is skipped without
+# them). The issue holds the outage state: one open issue
 # de-duplicates the alert across a long outage, the email is sent only when that
 # issue is first filed, and the issue closes itself once the site is healthy
 # again.
@@ -231,7 +231,7 @@ jobs:
         # outage arrives where the calendar alerts already arrive. always() so a
         # step above that failed after setting these outputs — `gh issue create`
         # hitting the API — still gets the outage emailed.
-        if: always() && steps.alert.outputs.subject != ''
+        if: always() && steps.alert.outputs.subject != '' && vars.ALERT_EMAIL != ''
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
