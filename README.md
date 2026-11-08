@@ -72,12 +72,16 @@ rezerwacji do 0. Jeśli to prawda (np. dwa odwołania naraz), usuń w Google wpi
 ogłoszenia, wtedy następny przebieg jest zielony. Zasady i powody są w docstringu
 skryptu, wszystkie mają testy w `tests/test_channel_sync.py`.
 
-Workflow ma co 15 minut odpalać Cloudflare Worker z katalogu `trigger/`. **Jeszcze nie jest
-wdrożony** (brak tokenu GitHub), więc dziś działa tylko cron GitHuba, który w praktyce odpala się co
-4-11 h; tyle trwa, zanim ręczny wpis w Google zablokuje platformy. Pilną rezerwację przepchniesz od
-razu: Actions -> Sync iCal feeds -> Run workflow, potem "Odśwież połączenie" w Bookingu i "Refresh"
-przy imporcie w Airbnb. Deploy: `cd trigger && npx wrangler deploy && npx wrangler secret put GITHUB_TOKEN`
-(fine-grained PAT tylko do tego repo, uprawnienie Actions: write).
+Workflow co 15 minut odpala Cloudflare Worker `villa-atlantic-sync-trigger` z katalogu `trigger/`
+(konto Cloudflare `pgrzegorczyk6@gmail.com`, wdrożony 08.11.2026; cron GitHuba to tylko zapas, w
+praktyce co 4-11 h). Potem Airbnb i Booking same pobierają pliki co kilka godzin. Pilną rezerwację
+przepchniesz od razu: Actions -> Sync iCal feeds -> Run workflow, potem "Odśwież połączenie" w
+Bookingu i "Refresh" przy imporcie w Airbnb.
+
+Deploy: `cd trigger && npx wrangler deploy && npx wrangler secret put GITHUB_TOKEN` (token
+Cloudflare z prawem Workers Scripts: Edit w `~/.config/cloudflare/villa-atlantic.env`; sekret to
+fine-grained PAT `villa-atlantic-sync-trigger`, tylko to repo, Actions: Read and write, kopia w `~/.config/villa-atlantic/github-trigger-token`). Gdy PAT wygaśnie, Worker
+zgłasza błąd, a synchronizacja spada do crona GitHuba.
 
 Ręczna próba bez zapisu (z katalogu głównego repo):
 

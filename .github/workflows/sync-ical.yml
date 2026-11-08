@@ -2,9 +2,8 @@ name: Sync iCal feeds
 
 on:
   schedule:
-    # GitHub fires this "hourly" cron every 4-11 h in practice. The 15-minute
-    # clock is the Cloudflare Worker in trigger/ (workflow_dispatch) once it is
-    # deployed (README).
+    # Fallback only: GitHub fires this "hourly" cron every 4-11 h in practice.
+    # The 15-minute clock is the Cloudflare Worker in trigger/ (workflow_dispatch).
     - cron: '17 * * * *'
   workflow_dispatch:
     inputs:
