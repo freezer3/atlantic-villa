@@ -258,7 +258,7 @@ jobs:
       - name: Fail run while a public Google Calendar feed is live
         if: always() && steps.sync.outputs.pii_live == '1'
         run: |
-          echo "::error::A public Google Calendar feed is live. In Google Calendar: Settings, the calendar, Access permissions for events, uncheck 'Make available to public'."
+          echo "::error::A public Google Calendar feed is live. In Google Calendar: Settings, the calendar, Access permissions for events, uncheck 'Make available to public'. The calendar is named in the 'PUBLIC feed for ... is LIVE' line of the 'Fetch, guard, sanitize, log' step."
           exit 1
 
       - name: Fail run if a wipe was blocked

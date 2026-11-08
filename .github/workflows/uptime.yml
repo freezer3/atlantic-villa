@@ -7,8 +7,9 @@ name: Uptime canary
 # served GitHub's 404 for an unknown number of days, because nothing here ever
 # fetched the live origin.
 #
-# The alert is a GitHub issue, plus an email once ALERT_EMAIL and the MAIL_*
-# secrets exist (they do not today; the step is skipped without them). The issue holds the outage state: one open issue
+# The alert is a GitHub issue, plus an email once ALERT_EMAIL and the
+# MAIL_* secrets exist (they do not today; the step is skipped without
+# them). The issue holds the outage state: one open issue
 # de-duplicates the alert across a long outage, the email is sent only when that
 # issue is first filed, and the issue closes itself once the site is healthy
 # again.
