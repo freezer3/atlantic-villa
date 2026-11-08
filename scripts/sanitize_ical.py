@@ -77,6 +77,9 @@ def sanitize(src: str) -> str:
     Pure function, deterministic, no I/O."""
     src = unfold(src).replace("\r\n", "\n")
     out: list[str] = []
+    # Events are emitted in sorted order: Google reorders VEVENTs between
+    # fetches, which made nearly every sync a commit with no real change.
+    events: list[list[str]] = []
     in_event = False
     ev: list[str] = []
     for line in src.split("\n"):
@@ -95,13 +98,14 @@ def sanitize(src: str) -> str:
                     # It represents no actual overnight stay, so skip it.
                     in_event = False
                     continue
-            out.append("BEGIN:VEVENT")
-            out.extend(shifted_ev)
-            out.append("SUMMARY:Booked")
-            out.append("TRANSP:OPAQUE")
-            out.append("END:VEVENT")
+            events.append(
+                ["BEGIN:VEVENT", *shifted_ev, "SUMMARY:Booked", "TRANSP:OPAQUE", "END:VEVENT"]
+            )
             in_event = False
             continue
+        if line == "END:VCALENDAR":
+            out.extend(ln for ev in sorted(events) for ln in ev)
+            events = []
         key = line.split(":", 1)[0].split(";", 1)[0]
         if in_event:
             if key in KEEP_IN_EVENT:
@@ -118,6 +122,7 @@ def sanitize(src: str) -> str:
             if line == "":
                 continue
             out.append(line)
+    out.extend(ln for ev in sorted(events) for ln in ev)  # feed without END:VCALENDAR
     return "\r\n".join(out) + "\r\n"
 
 
@@ -140,7 +145,9 @@ def _tzid_param(lhs: str) -> str | None:
 
 def parse_events(text: str) -> dict[str, dict[str, str | None]]:
     """Parse VEVENTs from iCal text into ``{uid: {start, end, created,
-    last_modified, start_tzid, end_tzid}}``.
+    last_modified, start_tzid, end_tzid[, summary]}}`` (``summary`` only when
+    the event has one; channel_sync uses it to tell Airbnb reservations from
+    Airbnb's own "Not available" blocks).
 
     Dates are normalized to ``YYYY-MM-DD`` for date-only values (timed values
     kept raw). ``start_tzid``/``end_tzid`` carry a timed value's TZID (``None``
@@ -200,6 +207,8 @@ def parse_events(text: str) -> dict[str, dict[str, str | None]]:
         elif key == "DTEND":
             cur["end"] = _normalize_date(value)
             cur["end_tzid"] = _tzid_param(lhs)
+        elif key == "SUMMARY":
+            cur["summary"] = value
         elif key == "CREATED":
             cur["created"] = value
         elif key == "LAST-MODIFIED":

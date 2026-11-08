@@ -2,6 +2,9 @@ name: Sync iCal feeds
 
 on:
   schedule:
+    # Fallback only: GitHub fires this "hourly" cron every 4-7 h in practice.
+    # The real 15-minute clock is the Cloudflare Worker in trigger/, which
+    # calls workflow_dispatch.
     - cron: '17 * * * *'
   workflow_dispatch:
     inputs:
@@ -13,11 +16,20 @@ on:
 permissions:
   contents: write
 
+# Two overlapping runs would both insert the same new Airbnb/Booking event.
+concurrency:
+  group: sync-ical
+  cancel-in-progress: false
+
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
+      # ref: main, not the trigger SHA: a run held by `concurrency` must start
+      # from the commit the previous run pushed, or its own push is rejected.
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Fetch, guard, sanitize, log
         id: sync
@@ -149,7 +161,28 @@ jobs:
           # .pii_alert.txt / .wipe_alert.txt are left for the trap to read, then
           # discarded with the runner (both are gitignored, never committed).
 
+      # Airbnb / Booking.com <-> Google Calendar (scripts/channel_sync.py).
+      # Runs after the website feeds so a Google API outage can never stop the
+      # site sync; its new events reach the site feed on the next run. It also
+      # runs when the site step failed. A broken feed fails this step (the run
+      # goes red, alert-router.yml opens its issue) but healthy listings and the
+      # mirrors are still committed; a crash leaves the mirror files unchanged.
+      - name: Sync Airbnb / Booking with Google Calendar
+        if: ${{ !cancelled() }}
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          # JSON {listing: Airbnb/Booking export URL}; listing names in scripts/channel_sync.py
+          CHANNEL_ICAL_URLS: ${{ secrets.CHANNEL_ICAL_URLS }}
+        run: |
+          set -euo pipefail
+          pip install --quiet google-auth==2.62.1 requests==2.34.2
+          python3 scripts/channel_sync.py
+
+      # Also after a failed step, so the mirrors still reach Airbnb/Booking.
+      # Scratch files are gitignored and every site feed that got this far
+      # already passed its wipe guard. Not after a manual cancel.
       - name: Commit if changed
+        if: ${{ !cancelled() }}
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

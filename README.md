@@ -43,6 +43,42 @@ Dodaj wydarzenie w **obu** kalendarzach (Cliffs + Gardens) na te same daty.
 
 ---
 
+## Synchronizacja Airbnb / Booking.com (`scripts/channel_sync.py`)
+
+Google Calendar jest jedynym źródłem prawdy. Krok "Sync Airbnb / Booking" w `sync-ical.yml`:
+
+1. pobiera eksport iCal każdego ogłoszenia (sekret `CHANNEL_ICAL_URLS`, JSON
+   `{"airbnb-villa": "<url>", ...}`; nazwy ogłoszeń w `LISTINGS` w skrypcie) i trzyma w
+   kalendarzach Google dokładnie jedno wydarzenie na rezerwację (konto
+   `villa-calendar-sync@claude-cod2.iam.gserviceaccount.com`, sekret `GOOGLE_SERVICE_ACCOUNT_JSON`,
+   prawo "Wprowadzanie zmian w wydarzeniach" w obu kalendarzach);
+2. publikuje `https://atlanticvilla.net/ical/mirror/<ogłoszenie>.ics`: zajęte noce danego mieszkania
+   bez rezerwacji z tego samego ogłoszenia. Te linki są zaimportowane w Airbnb i Booking.
+
+W extranecie Bookingu (Synchronizuj kalendarze -> "Zdecyduj, co chcesz eksportować") musi zostać
+**"Tylko zarezerwowane daty"**. Druga opcja może wysyłać też ręczne zamknięcia, które wtedy
+trafią do Google jako "Booking · ..." i będą blokować Airbnb.
+
+Zepsuty feed nic nie kasuje: jego rezerwacje zostają w Google i dalej blokują pozostałe platformy,
+a run kończy się na czerwono (alert przez `alert-router.yml`). Ten sam alert przy spadku z >= 2
+rezerwacji do 0. Jeśli to prawda (np. dwa odwołania naraz), usuń w Google wpisy automatyczne tego
+ogłoszenia, wtedy następny przebieg jest zielony. Zasady i powody są w docstringu
+skryptu, wszystkie mają testy w `tests/test_channel_sync.py`.
+
+Workflow co 15 minut odpala Cloudflare Worker z katalogu `trigger/` (cron GitHuba w praktyce
+odpala się co 4-7 h). Deploy: `cd trigger && npx wrangler deploy && npx wrangler secret put GITHUB_TOKEN`
+(fine-grained PAT tylko do tego repo, uprawnienie Actions: write).
+
+Ręczna próba bez zapisu (z katalogu głównego repo):
+
+```bash
+GOOGLE_SERVICE_ACCOUNT_JSON="$(cat ~/.config/villa-atlantic/calendar-sync-sa.json)" \
+CHANNEL_ICAL_URLS="$(cat .context/secrets/channel_urls.json)" \
+uv run --no-project --with google-auth --with requests python scripts/channel_sync.py --dry-run
+```
+
+---
+
 ## Jak pierwszy raz skonfigurować kalendarze (robi to Aleksandra raz)
 
 1. **Utwórz 2 nowe kalendarze** w Google Calendar:
