@@ -2,14 +2,13 @@ name: Sync iCal feeds
 
 on:
   schedule:
-    # Fallback only: GitHub fires this "hourly" cron every 4-7 h in practice.
-    # The real 15-minute clock is the Cloudflare Worker in trigger/, which
-    # calls workflow_dispatch.
+    # Fallback only: GitHub fires this "hourly" cron every 2-11 h in practice.
+    # The 15-minute clock is the Cloudflare Worker in trigger/ (workflow_dispatch).
     - cron: '17 * * * *'
   workflow_dispatch:
     inputs:
       confirm_wipe_apt:
-        description: 'Name of ONE calendar (e.g. cliffs) to accept a full wipe for (publish its empty feed). Bypasses the guard for that feed only; all others stay protected.'
+        description: 'Name of ONE calendar (e.g. cliffs) to accept a full wipe for (publish its new feed). Bypasses the guard for that feed only; all others stay protected.'
         type: string
         default: ''
 
@@ -24,6 +23,8 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    # A stalled feed download must not hold the concurrency group (default 360 min).
+    timeout-minutes: 15
     steps:
       # ref: main, not the trigger SHA: a run held by `concurrency` must start
       # from the commit the previous run pushed, or its own push is rejected.
@@ -128,7 +129,7 @@ jobs:
             git show "HEAD:ical/$apt.ics" > "ical/$apt.before.ics" 2>/dev/null \
               || : > "ical/$apt.before.ics"
 
-            # Guard: a feed that held >=2 bookings returning 0 is a wipe.
+            # Guard: >= 2 events going to 0, or none of >= 2 future stays left, is a wipe.
             # confirm_wipe_apt=<this apt> bypasses it for that one feed only.
             if [ "$apt" != "${CONFIRM_WIPE_APT:-}" ] \
                && ! guard_out="$(python3 scripts/sync_guard.py "ical/$apt.before.ics" "ical/$apt.candidate.ics")"; then
@@ -166,7 +167,8 @@ jobs:
       # site sync; its new events reach the site feed on the next run. It also
       # runs when the site step failed. A broken feed fails this step (the run
       # goes red, alert-router.yml opens its issue) but healthy listings and the
-      # mirrors are still committed; a crash leaves the mirror files unchanged.
+      # mirrors are still committed. Mirrors are written before the Google writes, so a
+      # crash there still publishes them; a crash before that leaves them unchanged.
       - name: Sync Airbnb / Booking with Google Calendar
         if: ${{ !cancelled() }}
         env:

@@ -48,12 +48,20 @@ Dodaj wydarzenie w **obu** kalendarzach (Cliffs + Gardens) na te same daty.
 Google Calendar jest jedynym źródłem prawdy. Krok "Sync Airbnb / Booking" w `sync-ical.yml`:
 
 1. pobiera eksport iCal każdego ogłoszenia (sekret `CHANNEL_ICAL_URLS`, JSON
-   `{"airbnb-villa": "<url>", ...}`; nazwy ogłoszeń w `LISTINGS` w skrypcie) i trzyma w
+   `{"airbnb-villa": "<url>", ...}` z dokładnie 5 kluczami z `LISTINGS` w skrypcie, łącznie z
+   `airbnb-villa`; inaczej krok kończy się błędem i nie zmienia ani Google, ani plików mirror) i trzyma w
    kalendarzach Google dokładnie jedno wydarzenie na rezerwację (konto
    `villa-calendar-sync@claude-cod2.iam.gserviceaccount.com`, sekret `GOOGLE_SERVICE_ACCOUNT_JSON`,
    prawo "Wprowadzanie zmian w wydarzeniach" w obu kalendarzach);
 2. publikuje `https://atlanticvilla.net/ical/mirror/<ogłoszenie>.ics`: zajęte noce danego mieszkania
-   bez rezerwacji z tego samego ogłoszenia. Te linki są zaimportowane w Airbnb i Booking.
+   bez rezerwacji z tego samego ogłoszenia. Zaimportowane są 4: `airbnb-cliffs`, `airbnb-gardens`
+   (Airbnb, nazwa "Google Calendar (Villa)") i `booking-cliffs`, `booking-gardens` (Booking,
+   połączenie "Villa sync (Google)"). **`airbnb-villa.ics` nie importuj**: willa jest w Airbnb
+   połączona z Cliffs i Gardens, więc blokada zaimportowana na willę zamyka oba mieszkania. Willę
+   zamyka samo połączenie ogłoszeń.
+
+Eksport Airbnb nie pokazuje blokad z własnego importu ogłoszenia, więc dostępność sprawdza się na
+publicznej stronie ogłoszenia (np. `airbnb.com/rooms/<id>?check_in=...&check_out=...`).
 
 W extranecie Bookingu (Synchronizuj kalendarze -> "Zdecyduj, co chcesz eksportować") musi zostać
 **"Tylko zarezerwowane daty"**. Druga opcja może wysyłać też ręczne zamknięcia, które wtedy
@@ -62,12 +70,37 @@ trafią do Google jako "Booking · ..." i będą blokować Airbnb.
 Zepsuty feed nic nie kasuje: jego rezerwacje zostają w Google i dalej blokują pozostałe platformy,
 a run kończy się na czerwono (alert przez `alert-router.yml`). Ten sam alert przy spadku z >= 2
 rezerwacji do 0. Jeśli to prawda (np. dwa odwołania naraz), usuń w Google wpisy automatyczne tego
-ogłoszenia, wtedy następny przebieg jest zielony. Zasady i powody są w docstringu
-skryptu, wszystkie mają testy w `tests/test_channel_sync.py`.
+ogłoszenia, wtedy następny przebieg jest zielony (chyba że to były wszystkie przyszłe pobyty
+mieszkania, wtedy patrz niżej).
 
-Workflow co 15 minut odpala Cloudflare Worker z katalogu `trigger/` (cron GitHuba w praktyce
-odpala się co 4-7 h). Deploy: `cd trigger && npx wrangler deploy && npx wrangler secret put GITHUB_TOKEN`
-(fine-grained PAT tylko do tego repo, uprawnienie Actions: write).
+Osobny alert "calendar wipe BLOCKED" przychodzi, gdy z kalendarza mieszkania znikną naraz wszystkie
+(>= 2) przyszłe pobyty. Strona i pliki mirror trzymają wtedy stary stan, ale nowe rezerwacje z
+Airbnb/Bookingu dla tego mieszkania nie trafiają do Google ani na drugą platformę, a nowe wpisy
+ręczne w Google nie trafiają na Airbnb/Booking, więc do decyzji blokuj je ręcznie. Jeśli usunięcie
+było przypadkiem, przywróć wpisy z Kosza w Google Calendar (daty są w alercie, linie `vanished:`). Jeśli było celowe (np. dwa odwołania naraz), uruchom
+Actions -> Sync iCal feeds -> Run workflow z `confirm_wipe_apt` = `cliffs` albo `gardens` (małymi
+literami).
+Zasady i powody są w docstringu
+skryptu, testy logiki są w `tests/test_channel_sync.py`.
+
+Workflow co 15 minut odpala Cloudflare Worker `villa-atlantic-sync-trigger` z katalogu `trigger/`
+(konto Cloudflare `pgrzegorczyk6@gmail.com`, wdrożony 08.11.2026; cron GitHuba to tylko zapas, w
+praktyce co 2-11 h). Potem Airbnb i Booking same pobierają pliki co kilka godzin. Pilną rezerwację
+przepchniesz od razu: Actions -> Sync iCal feeds -> Run workflow, potem "Odśwież połączenie" w
+Bookingu i "Refresh" przy imporcie w Airbnb.
+
+Deploy (token Cloudflare z prawem Workers Scripts: Edit jest w
+`~/.config/cloudflare/villa-atlantic.env`):
+
+```
+source ~/.config/cloudflare/villa-atlantic.env
+cd trigger && npx wrangler deploy && npx wrangler secret put GITHUB_TOKEN
+```
+
+Sekret to fine-grained PAT `villa-atlantic-sync-trigger` (tylko to repo, Actions: Read and write,
+kopia w `~/.config/villa-atlantic/github-trigger-token`). Gdy PAT przestanie działać (cofnięty),
+Worker loguje błąd tylko w Cloudflare, bez alertu, a synchronizacja po cichu spada do crona GitHuba.
+Dlatego co jakiś czas sprawdź w Actions, że runy `workflow_dispatch` idą co 15 minut.
 
 Ręczna próba bez zapisu (z katalogu głównego repo):
 
@@ -79,31 +112,20 @@ uv run --no-project --with google-auth --with requests python scripts/channel_sy
 
 ---
 
-## Jak pierwszy raz skonfigurować kalendarze (robi to Aleksandra raz)
+## Konfiguracja kalendarzy Google (gotowa, nic tu nie trzeba robić)
 
-1. **Utwórz 2 nowe kalendarze** w Google Calendar:
-   - Ustawienia → "Dodaj kalendarz" → "Utwórz nowy kalendarz"
-   - Nazwy: `Villa Atlantic — Cliffs` i `Villa Atlantic — Gardens`
+Kalendarze Cliffs i Gardens istnieją i są podłączone. Ta sekcja przyda się tylko wtedy, gdyby
+trzeba było podłączyć je od nowa:
 
-2. **Nie udostępniaj kalendarzy publicznie**:
-   - Otwórz ustawienia kalendarza (trzy kropki → Ustawienia)
-   - "Uprawnienia dostępu" → **nie zaznaczaj** "Udostępnij publicznie"
-   - Jeśli było już włączone, odznacz "Udostępnij publicznie" i zapisz. Publiczny link iCal z historii repo nie może działać.
-
-3. **Pobierz prywatny link iCal** dla każdego kalendarza:
-   - W ustawieniach kalendarza → sekcja "Zintegruj kalendarz"
-   - Skopiuj **"Tajny adres w formacie iCal"** / **"Secret address in iCal format"**
-   - Tego linku nie wklejaj do `index.html` ani do commita.
-
-4. **Dodaj linki jako sekrety GitHub Actions**:
-   - W repo GitHub: Settings → Secrets and variables → Actions → New repository secret
-   - `CLIFFS_ICAL_URL` → prywatny link iCal dla Cliffs
-   - `GARDENS_ICAL_URL` → prywatny link iCal dla Gardens
-   - Workflow zapisuje bezpieczne pliki `ical/cliffs.ics` i `ical/gardens.ics`; strona czyta tylko je.
-
-5. **Udostępnij kalendarze mamie**:
-   - W każdym kalendarzu → Ustawienia → "Udostępnij konkretnym osobom"
-   - Dodaj email mamy z uprawnieniami "Dokonywanie zmian w wydarzeniach"
+- Kalendarze **nie mogą być publiczne** (Ustawienia kalendarza -> "Uprawnienia dostępu" ->
+  "Udostępnij publicznie" odznaczone). Publiczny link iCal z historii repo pokazywałby nazwiska
+  gości; workflow sprawdza przy każdym przebiegu, że jest wyłączony.
+- "Tajny adres w formacie iCal" każdego kalendarza (Ustawienia -> "Zintegruj kalendarz") jest
+  sekretem GitHub Actions `CLIFFS_ICAL_URL` / `GARDENS_ICAL_URL`. Nie wklejaj go do kodu ani
+  commita. Workflow zapisuje z niego oczyszczone `ical/cliffs.ics` i `ical/gardens.ics`, które czyta
+  strona.
+- Osoby, które wpisują rezerwacje, mają w obu kalendarzach "Wprowadzanie zmian w wydarzeniach";
+  konto synchronizacji z Airbnb/Booking też (sekcja wyżej).
 
 ---
 
@@ -122,10 +144,6 @@ Teksty, których nie da się zrobić rodzeństwem `data-lang` (tytuł strony, me
 Zmień tekst, zapisz, wgraj zmiany na serwer (patrz: deploy).
 
 > **Uwaga (kalendarz, lokalizacja miesięcy):** nazwy miesięcy/dni i przyciski FullCalendar biorą się z paczek lokalizacji ładowanych osobno. **Muszą** pochodzić z `@fullcalendar/core@6.1.15/locales/<lang>.global.min.js` — ścieżka `fullcalendar@6.1.15/locales/*` (bez `@fullcalendar/core`) zwraca **404** i kalendarz zostaje po angielsku.
-
-### Co do uzupełnienia przed publikacją
-
-- Sekrety `CLIFFS_ICAL_URL` i `GARDENS_ICAL_URL` w GitHub Actions → prywatne linki iCal (patrz wyżej)
 
 ---
 
@@ -147,7 +165,7 @@ Konfiguracja, gdyby trzeba było ją kiedyś odtworzyć:
 
 ### Monitoring: canary (`.github/workflows/uptime.yml`)
 
-Co 15 minut pobiera **żywą** stronę i sprawdza, że naprawdę serwuje willę: HTTP 200 + treść naszej strony (nie parkingu domeny ani 404 GitHuba), oba kanały `ical/*.ics` jako prawidłowy `BEGIN:VCALENDAR`, oraz certyfikat TLS ważny jeszcze ponad 14 dni.
+Co 15 minut pobiera **żywą** stronę i sprawdza, że naprawdę serwuje willę: HTTP 200 + treść naszej strony (nie parkingu domeny ani 404 GitHuba), oba kanały `ical/*.ics` i 4 importowane pliki `ical/mirror/*.ics` jako prawidłowy `BEGIN:VCALENDAR`, oraz certyfikat TLS ważny jeszcze ponad 14 dni.
 
 Jeśli przyczyną jest konfiguracja Pages w repo (wyłączone Pages, skasowana domena, zmieniona gałąź) — canary **sam ją przywraca** i strona wraca bez udziału człowieka. Run i tak kończy się na czerwono, żeby awaria została w historii Actions.
 

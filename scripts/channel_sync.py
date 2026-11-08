@@ -27,6 +27,13 @@ Safety rules (tests in tests/test_channel_sync.py):
   setting is "Tylko zarezerwowane daty" (reservations only; verified 1:1
   against the reservation list on 08.11.2026), so every event is synced.
   Keep that setting (README); any extra closures would fail safe as blocks.
+- Unknown Airbnb summaries and feeds without BEGIN/END:VCALENDAR fail the
+  listing (format drift or a truncated download), same as a failed download.
+- An apartment whose Google calendar no longer holds any of the >= 2 future
+  stays in its site feed looks wiped: nothing is written to that
+  calendar and its mirrors keep the last file (looks_wiped).
+- airbnb-villa gets no mirror (NO_MIRROR): Airbnb's native villa link already
+  spreads the apartment imports to the villa.
 - Checkout day: platform DTEND is the checkout day. Google events are written
   with end = checkout + 1 to match how bookings are entered by hand
   (README: "data końcowa to dzień wymeldowania"), so sanitize_ical's one-day
@@ -38,9 +45,9 @@ CLI (the sync workflow runs it after the website feed step):
 
 Env (both are repo secrets): GOOGLE_SERVICE_ACCOUNT_JSON (service-account key
 with "Make changes to events" on both calendars) and CHANNEL_ICAL_URLS, a JSON
-object {listing: export URL}. Listings without a URL still get a mirror file.
-Without the key the script prints a notice and exits 0, so the workflow keeps
-working before setup.
+object {listing: export URL} with exactly the LISTINGS keys (else exit 1,
+nothing written). Without GOOGLE_SERVICE_ACCOUNT_JSON the script prints a
+notice and exits 0.
 """
 
 from __future__ import annotations
@@ -55,6 +62,7 @@ import urllib.request
 from zoneinfo import ZoneInfo
 
 from sanitize_ical import parse_events
+from sync_guard import future
 
 CALENDARS = {
     "cliffs": "b2a835e6bed7c0910197c6510d83e2183cd6a0ef16dc04db27d6126d82f53f8b"
@@ -70,6 +78,11 @@ LISTINGS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "booking-cliffs": ("Booking", "Cliffs", ("cliffs",)),
     "booking-gardens": ("Booking", "Gardens", ("gardens",)),
 }
+# Listings with no mirror. The villa is natively linked to Cliffs and Gardens in Airbnb,
+# so a block imported on the villa spreads to both apartments (seen 08.11.2026); the
+# apartment imports reach the villa through that link instead.
+NO_MIRROR = {"airbnb-villa"}
+AIRBNB_SUMMARIES = {"Reserved", "Airbnb (Not available)"}
 MIRROR_DIR = pathlib.Path("ical/mirror")
 TAG = "channel-sync"
 DAY = dt.timedelta(days=1)
@@ -90,15 +103,19 @@ def reservations(listing: str, text: str, today: dt.date) -> set[Range]:
     on anything that does not look like a sane feed, so the caller keeps the
     last-good state instead of deleting bookings."""
     platform = LISTINGS[listing][0]
-    if "BEGIN:VCALENDAR" not in text:
-        raise ValueError("response is not an iCal feed")
+    if "BEGIN:VCALENDAR" not in text or "END:VCALENDAR" not in text:
+        raise ValueError("response is not a complete iCal feed")
     events = parse_events(text)
     if text.count("BEGIN:VEVENT") != len(events):
         raise ValueError("feed has events without a unique UID; format changed?")
     out = set()
     for ev in events.values():
-        if platform == "Airbnb" and ev.get("summary") != "Reserved":
-            continue
+        if platform == "Airbnb":
+            # An unknown label could be a reservation; skipping it would delete the booking.
+            if ev.get("summary") not in AIRBNB_SUMMARIES:
+                raise ValueError(f"unknown Airbnb event {ev.get('summary')!r}; format changed?")
+            if ev["summary"] != "Reserved":
+                continue
         rng = ical_range(ev)
         if rng is None:
             raise ValueError(f"unexpected non all-day event {ev['start']} -> {ev['end']}")
@@ -171,14 +188,29 @@ def mirror_ics(ranges: list[Range]) -> str:
     return "\r\n".join(lines) + "\r\n"
 
 
+def looks_wiped(site_feed: str, events: list[dict], today: dt.date) -> bool:
+    """None of the >= 2 future stays in the last published site feed
+    (ical/<apt>.ics, kept at last-good by sync_guard) is still in Google,
+    matched by UID like sync_guard.is_wipe (site UID = Google iCalUID, checked
+    live 08.11.2026). Leftover or newly added events do not hide the wipe. Holds
+    until confirm_wipe_apt publishes the new feed, or until fewer than 2 held
+    stays are still ahead."""
+    held = future(parse_events(site_feed), today)
+    return len(held) >= 2 and not held.keys() & {ev.get("iCalUID") for ev in events}
+
+
 def plan(
     feeds: dict[str, str | Exception],
     existing: dict[str, list[dict]],
     today: dt.date,
+    wiped: frozenset[str] = frozenset(),
 ):
     """Pure core. feeds: listing -> export text, or the fetch exception
     (listings without a URL are absent). existing: apartment -> current and
-    future Google events. Returns (inserts [(apt, body)], deletes [(apt, id)],
+    future Google events. wiped: apartments whose calendar looks wiped (see
+    looks_wiped); nothing is written to them and their mirrors keep the old
+    file, while a whole-villa listing still syncs the healthy apartment.
+    Returns (inserts [(apt, body)], deletes [(apt, id)],
     mirrors {listing: ics}, status {listing: "ok" | error})."""
     status: dict[str, str] = {}
     want: dict[str, set[Range]] = {}
@@ -202,16 +234,30 @@ def plan(
         status[listing] = "ok"
         want[listing] = res
 
+    # Refilling a wiped calendar would hide the wipe from the site's guard, and its
+    # mirrors would drop every hand booking, so touch nothing there.
+    for listing in want:
+        if hit := wiped & set(LISTINGS[listing][2]):
+            status[listing] = (
+                f"calendar {', '.join(sorted(hit))} looks wiped; changed nothing there"
+            )
+
     inserts: list[tuple[str, dict]] = []
     deletes: list[tuple[str, str]] = []
     busy: dict[str, list[tuple[Range, str | None]]] = {u: [] for u in CALENDARS}
     for unit, events in existing.items():
+        if unit in wiped:
+            continue
         seen: set[tuple[str, Range]] = set()
         for ev in events:
             listing, rng = source(ev), gcal_range(ev)
             if rng and rng[1] <= today:
                 continue  # checkout today: no longer in the feed, keep it as history
-            if listing in want and (rng not in want[listing] or (listing, rng) in seen):
+            if listing in want and (
+                rng not in want[listing]
+                or (listing, rng) in seen
+                or unit not in LISTINGS[listing][2]  # moved to the other calendar by hand
+            ):
                 deletes.append((unit, ev["id"]))  # cancelled, moved, or a duplicate
                 continue
             seen.add((listing, rng))
@@ -226,6 +272,7 @@ def plan(
     mirrors = {
         listing: mirror_ics([rng for u in units for rng, src in busy[u] if src != listing])
         for listing, (_, _, units) in LISTINGS.items()
+        if listing not in NO_MIRROR and not wiped & set(units)  # wiped: keep the old file
     }
     return inserts, deletes, mirrors, status
 
@@ -275,8 +322,18 @@ def main(argv: list[str]) -> int:
     today = dt.datetime.now(ZoneInfo("Atlantic/Canary")).date()
     existing = {apt: _list_events(session, cal, today) for apt, cal in CALENDARS.items()}
     urls = json.loads(os.environ.get("CHANNEL_ICAL_URLS") or "{}")
-    feeds = {name: _fetch(urls[name]) for name in LISTINGS if urls.get(name)}
-    inserts, deletes, mirrors, status = plan(feeds, existing, today)
+    if set(urls) != set(LISTINGS):
+        # A missing or misspelled key would silently stop syncing that listing.
+        print(f"CHANNEL_ICAL_URLS keys must be exactly {sorted(LISTINGS)}; got {sorted(urls)}")
+        return 1
+    feeds = {name: _fetch(urls[name]) for name in LISTINGS}
+    site = {u: pathlib.Path(f"ical/{u}.ics") for u in CALENDARS}
+    wiped = frozenset(
+        u
+        for u, path in site.items()
+        if path.exists() and looks_wiped(path.read_text(encoding="utf-8"), existing[u], today)
+    )
+    inserts, deletes, mirrors, status = plan(feeds, existing, today, wiped)
     # Check-in..checkout as the platforms show it (Google's end date is checkout + 1).
     for apt, body in inserts:
         start, checkout = gcal_range(body)
@@ -293,15 +350,17 @@ def main(argv: list[str]) -> int:
     if args.dry_run:
         return int(failed)
 
+    # Mirrors first: they are already complete, so a failing Google write never stops
+    # hand entries from reaching the platforms.
+    MIRROR_DIR.mkdir(parents=True, exist_ok=True)
+    for name, ics in mirrors.items():
+        (MIRROR_DIR / f"{name}.ics").write_text(ics, encoding="utf-8")
     for apt, body in inserts:
         session.post(f"{API}/{CALENDARS[apt]}/events", json=body, timeout=30).raise_for_status()
     for apt, ev_id in deletes:
         r = session.delete(f"{API}/{CALENDARS[apt]}/events/{ev_id}", timeout=30)
         if r.status_code != 410:  # 410 = already deleted
             r.raise_for_status()
-    MIRROR_DIR.mkdir(parents=True, exist_ok=True)
-    for name, ics in mirrors.items():
-        (MIRROR_DIR / f"{name}.ics").write_text(ics, encoding="utf-8")
     return int(failed)
 
 

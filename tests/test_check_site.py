@@ -81,8 +81,8 @@ def test_run_checks_reports_every_failure_not_just_the_first():
     """One run must show the whole picture, so a fix is not a game of whack-a-mole."""
     all_dead = _fetcher({})
     failures = run_checks("x", all_dead, lambda host: 0)
-    # apex + www + 2 calendars + certificate
-    assert len(failures) == 5
+    # apex + www + 2 site calendars + 4 platform mirrors + certificate
+    assert len(failures) == 9
 
 
 def test_run_checks_passes_on_a_fully_healthy_site():
@@ -92,9 +92,13 @@ def test_run_checks_passes_on_a_fully_healthy_site():
             "https://www.x/": (200, REAL_PAGE),
             "https://x/ical/cliffs.ics": (200, REAL_ICS),
             "https://x/ical/gardens.ics": (200, REAL_ICS),
+            **{f"https://x/ical/mirror/{m}.ics": (200, REAL_ICS) for m in MIRRORS},
         }
     )
     assert run_checks("x", healthy, lambda host: 90) == []
+
+
+MIRRORS = ("airbnb-cliffs", "airbnb-gardens", "booking-cliffs", "booking-gardens")
 
 
 def test_domain_comes_from_the_cname_file():

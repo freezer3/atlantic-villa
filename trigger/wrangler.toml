@@ -1,6 +1,7 @@
 name = "villa-atlantic-sync-trigger"
 main = "worker.js"
 compatibility_date = "2026-11-01"
+workers_dev = false  # cron only, no public URL
 
 [triggers]
 crons = ["*/15 * * * *"]

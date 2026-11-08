@@ -31,7 +31,15 @@ CNAME_FILE = Path(__file__).resolve().parent.parent / "CNAME"
 # real site from any other 200: the <title>, and the canonical/og URL that only
 # this site's HTML carries.
 PAGE_MARKERS = ("Villa Atlantic", "<title>", "canonical")
-ICS_PATHS = ("/ical/cliffs.ics", "/ical/gardens.ics")
+ICS_PATHS = (
+    "/ical/cliffs.ics",
+    "/ical/gardens.ics",
+    # Imported by Airbnb and Booking (scripts/channel_sync.py); a 404 here stops blocking.
+    "/ical/mirror/airbnb-cliffs.ics",
+    "/ical/mirror/airbnb-gardens.ics",
+    "/ical/mirror/booking-cliffs.ics",
+    "/ical/mirror/booking-gardens.ics",
+)
 MIN_CERT_DAYS = 14
 TIMEOUT = 20
 USER_AGENT = "villa-atlantic-uptime-canary"
