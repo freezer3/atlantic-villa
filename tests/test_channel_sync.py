@@ -158,6 +158,8 @@ def test_looks_wiped_only_when_future_stays_vanish():
         + "END:VCALENDAR\r\n"
     )
     assert not looks_wiped(timed, [], TODAY)  # past timed entries are not future stays
+    leftovers = [gev("out", "2026-11-03", "2026-11-08"), gev("note", "2026-11-20", "2026-11-21")]
+    assert looks_wiped(site, leftovers, TODAY)  # checkout today + one-day note hide nothing
 
 
 def test_wiped_calendar_still_syncs_villa_into_the_healthy_one():

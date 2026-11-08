@@ -14,9 +14,11 @@ The guard trips on either condition, per feed:
 
 The second catches every upcoming booking deleted while past ones remain
 (future = ends after today on the Canary Islands, the same for both feeds, so
-time passing never trips it). Anything else publishes normally: a single
-checkout (1 -> 0), partial change (2 -> 1), additions, reorders. The 2+ floor
-avoids tripping on a calendar that only ever had one booking.
+time passing never trips it; it also means a wipe left unconfirmed stops being
+held once fewer than 2 of the held stays are still ahead). Anything else
+publishes normally: a single checkout (1 -> 0), partial change (2 -> 1),
+additions, reorders. The 2+ floor avoids tripping on a calendar that only ever
+had one booking.
 
 CLI (used by the sync workflow):
 

@@ -189,11 +189,12 @@ def mirror_ics(ranges: list[Range]) -> str:
 
 
 def looks_wiped(site_feed: str, events: list[dict], today: dt.date) -> bool:
-    """Google returns no future events for a calendar whose last published site
-    feed (ical/<apt>.ics, kept at last-good by the site's wipe guard) still has
-    >= 2 future stays. sync_guard keeps the site feed at last-good when its future
-    stays vanish, so this holds until confirm_wipe_apt publishes the new feed."""
-    if events:
+    """Google has no stay ending after today in a calendar whose last published
+    site feed (ical/<apt>.ics, kept at last-good by sync_guard) still has >= 2.
+    Same night rule as sync_guard.future, so a checkout-today stay or a one-day
+    note left behind does not hide the wipe. Holds until confirm_wipe_apt
+    publishes the new feed, or until all but one held stay has checked out."""
+    if any((rng := gcal_range(ev)) and rng[1] > today for ev in events):
         return False
     return len(future(parse_events(site_feed), today)) >= 2
 
