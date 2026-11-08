@@ -55,6 +55,10 @@ Google Calendar jest jedynym źródłem prawdy. Krok "Sync Airbnb / Booking" w `
 2. publikuje `https://atlanticvilla.net/ical/mirror/<ogłoszenie>.ics`: zajęte noce danego mieszkania
    bez rezerwacji z tego samego ogłoszenia. Te linki są zaimportowane w Airbnb i Booking.
 
+W extranecie Bookingu (Synchronizuj kalendarze -> "Zdecyduj, co chcesz eksportować") musi zostać
+**"Tylko zarezerwowane daty"**. Druga opcja wysyła też ręczne zamknięcia i nasze blokady, które
+wtedy trafią do Google jako "Booking · ..." i będą blokować Airbnb.
+
 Zepsuty feed nic nie kasuje: jego rezerwacje zostają w Google i dalej blokują pozostałe platformy,
 a run kończy się na czerwono (alert przez `alert-router.yml`). Ten sam alert przy spadku z >= 2
 rezerwacji do 0. Jeśli to prawda (np. dwa odwołania naraz), usuń w Google wpisy automatyczne tego
