@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm_wipe_apt:
-        description: 'Name of ONE calendar (e.g. cliffs) to accept a full wipe for (publish its empty feed). Bypasses the guard for that feed only; all others stay protected.'
+        description: 'Name of ONE calendar (e.g. cliffs) to accept a full wipe for (publish its new feed). Bypasses the guard for that feed only; all others stay protected.'
         type: string
         default: ''
 
@@ -129,7 +129,7 @@ jobs:
             git show "HEAD:ical/$apt.ics" > "ical/$apt.before.ics" 2>/dev/null \
               || : > "ical/$apt.before.ics"
 
-            # Guard: a feed that held >=2 bookings returning 0 is a wipe.
+            # Guard: >= 2 events going to 0, or none of >= 2 future stays left, is a wipe.
             # confirm_wipe_apt=<this apt> bypasses it for that one feed only.
             if [ "$apt" != "${CONFIRM_WIPE_APT:-}" ] \
                && ! guard_out="$(python3 scripts/sync_guard.py "ical/$apt.before.ics" "ical/$apt.candidate.ics")"; then

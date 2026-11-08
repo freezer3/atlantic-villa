@@ -70,10 +70,16 @@ trafią do Google jako "Booking · ..." i będą blokować Airbnb.
 Zepsuty feed nic nie kasuje: jego rezerwacje zostają w Google i dalej blokują pozostałe platformy,
 a run kończy się na czerwono (alert przez `alert-router.yml`). Ten sam alert przy spadku z >= 2
 rezerwacji do 0. Jeśli to prawda (np. dwa odwołania naraz), usuń w Google wpisy automatyczne tego
-ogłoszenia, wtedy następny przebieg jest zielony. Osobny alert "calendar wipe BLOCKED" przychodzi,
-gdy z kalendarza mieszkania znikną naraz wszystkie (>= 2) przyszłe pobyty; do czasu decyzji nowe
-rezerwacje z Airbnb/Bookingu dla tego mieszkania nie trafiają do Google. Jeśli to prawda (np. dwa
-odwołania naraz), uruchom Actions -> Sync iCal feeds -> Run workflow z `confirm_wipe_apt=<mieszkanie>`.
+ogłoszenia, wtedy następny przebieg jest zielony (chyba że to były wszystkie przyszłe pobyty
+mieszkania, wtedy patrz niżej).
+
+Osobny alert "calendar wipe BLOCKED" przychodzi, gdy z kalendarza mieszkania znikną naraz wszystkie
+(>= 2) przyszłe pobyty. Strona i pliki mirror trzymają wtedy stary stan, ale nowe rezerwacje z
+Airbnb/Bookingu dla tego mieszkania nie trafiają do Google ani na drugą platformę, więc do decyzji
+blokuj je ręcznie. Jeśli usunięcie było przypadkiem, przywróć wpisy z Kosza w Google Calendar (daty
+podpowie `scripts/restore_booking.py`). Jeśli było celowe (np. dwa odwołania naraz), uruchom
+Actions -> Sync iCal feeds -> Run workflow z `confirm_wipe_apt` = `cliffs` albo `gardens` (małymi
+literami).
 Zasady i powody są w docstringu
 skryptu, testy logiki są w `tests/test_channel_sync.py`.
 
