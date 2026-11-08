@@ -48,7 +48,8 @@ Dodaj wydarzenie w **obu** kalendarzach (Cliffs + Gardens) na te same daty.
 Google Calendar jest jedynym źródłem prawdy. Krok "Sync Airbnb / Booking" w `sync-ical.yml`:
 
 1. pobiera eksport iCal każdego ogłoszenia (sekret `CHANNEL_ICAL_URLS`, JSON
-   `{"airbnb-villa": "<url>", ...}`; nazwy ogłoszeń w `LISTINGS` w skrypcie) i trzyma w
+   `{"airbnb-villa": "<url>", ...}` z dokładnie 5 kluczami z `LISTINGS` w skrypcie, łącznie z
+   `airbnb-villa`; inaczej run kończy się błędem i nic nie zapisuje) i trzyma w
    kalendarzach Google dokładnie jedno wydarzenie na rezerwację (konto
    `villa-calendar-sync@claude-cod2.iam.gserviceaccount.com`, sekret `GOOGLE_SERVICE_ACCOUNT_JSON`,
    prawo "Wprowadzanie zmian w wydarzeniach" w obu kalendarzach);
@@ -70,7 +71,7 @@ Zepsuty feed nic nie kasuje: jego rezerwacje zostają w Google i dalej blokują 
 a run kończy się na czerwono (alert przez `alert-router.yml`). Ten sam alert przy spadku z >= 2
 rezerwacji do 0. Jeśli to prawda (np. dwa odwołania naraz), usuń w Google wpisy automatyczne tego
 ogłoszenia, wtedy następny przebieg jest zielony. Zasady i powody są w docstringu
-skryptu, wszystkie mają testy w `tests/test_channel_sync.py`.
+skryptu, testy logiki są w `tests/test_channel_sync.py`.
 
 Workflow co 15 minut odpala Cloudflare Worker `villa-atlantic-sync-trigger` z katalogu `trigger/`
 (konto Cloudflare `pgrzegorczyk6@gmail.com`, wdrożony 08.11.2026; cron GitHuba to tylko zapas, w
@@ -78,10 +79,17 @@ praktyce co 4-11 h). Potem Airbnb i Booking same pobierają pliki co kilka godzi
 przepchniesz od razu: Actions -> Sync iCal feeds -> Run workflow, potem "Odśwież połączenie" w
 Bookingu i "Refresh" przy imporcie w Airbnb.
 
-Deploy: `cd trigger && npx wrangler deploy && npx wrangler secret put GITHUB_TOKEN` (token
-Cloudflare z prawem Workers Scripts: Edit w `~/.config/cloudflare/villa-atlantic.env`; sekret to
-fine-grained PAT `villa-atlantic-sync-trigger`, tylko to repo, Actions: Read and write, kopia w `~/.config/villa-atlantic/github-trigger-token`). Gdy PAT wygaśnie, Worker
-zgłasza błąd, a synchronizacja spada do crona GitHuba.
+Deploy (token Cloudflare z prawem Workers Scripts: Edit jest w
+`~/.config/cloudflare/villa-atlantic.env`):
+
+```
+set -a; source ~/.config/cloudflare/villa-atlantic.env; set +a
+cd trigger && npx wrangler deploy && npx wrangler secret put GITHUB_TOKEN
+```
+
+Sekret to fine-grained PAT `villa-atlantic-sync-trigger` (tylko to repo, Actions: Read and write,
+kopia w `~/.config/villa-atlantic/github-trigger-token`). Gdy PAT wygaśnie, Worker zgłasza błąd,
+a synchronizacja spada do crona GitHuba.
 
 Ręczna próba bez zapisu (z katalogu głównego repo):
 

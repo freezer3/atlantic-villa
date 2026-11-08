@@ -1,7 +1,7 @@
 // Runs the "Sync iCal feeds" workflow every 15 minutes. GitHub's own cron in
-// sync-ical.yml is a fallback only: measured Oct-Nov 2026 it fired every 4-7 h,
+// sync-ical.yml is a fallback only: measured Oct-Nov 2026 it fired every 4-11 h,
 // which is too slow to stop a double booking between Airbnb and Booking.com.
-// GITHUB_TOKEN: fine-grained PAT, repo freezer3/atlantic-villa, Actions: write.
+// GITHUB_TOKEN: fine-grained PAT, repo freezer3/atlantic-villa, Actions: read and write.
 export default {
   async scheduled(controller, env) {
     const res = await fetch(

@@ -167,7 +167,8 @@ jobs:
       # site sync; its new events reach the site feed on the next run. It also
       # runs when the site step failed. A broken feed fails this step (the run
       # goes red, alert-router.yml opens its issue) but healthy listings and the
-      # mirrors are still committed; a crash leaves the mirror files unchanged.
+      # mirrors are still committed. Mirrors are written before the Google writes, so a
+      # crash there still publishes them; a crash before that leaves them unchanged.
       - name: Sync Airbnb / Booking with Google Calendar
         if: ${{ !cancelled() }}
         env:
