@@ -53,7 +53,14 @@ Google Calendar jest jedynym źródłem prawdy. Krok "Sync Airbnb / Booking" w `
    `villa-calendar-sync@claude-cod2.iam.gserviceaccount.com`, sekret `GOOGLE_SERVICE_ACCOUNT_JSON`,
    prawo "Wprowadzanie zmian w wydarzeniach" w obu kalendarzach);
 2. publikuje `https://atlanticvilla.net/ical/mirror/<ogłoszenie>.ics`: zajęte noce danego mieszkania
-   bez rezerwacji z tego samego ogłoszenia. Te linki są zaimportowane w Airbnb i Booking.
+   bez rezerwacji z tego samego ogłoszenia. Zaimportowane są 4: `airbnb-cliffs`, `airbnb-gardens`
+   (Airbnb, nazwa "Google Calendar (Villa)") i `booking-cliffs`, `booking-gardens` (Booking,
+   połączenie "Villa sync (Google)"). **`airbnb-villa.ics` nie importuj**: willa jest w Airbnb
+   połączona z Cliffs i Gardens, więc blokada zaimportowana na willę zamyka oba mieszkania. Willę
+   zamyka samo połączenie ogłoszeń.
+
+Eksport Airbnb nie pokazuje blokad z własnego importu ogłoszenia, więc dostępność sprawdza się na
+publicznej stronie ogłoszenia (np. `airbnb.com/rooms/<id>?check_in=...&check_out=...`).
 
 W extranecie Bookingu (Synchronizuj kalendarze -> "Zdecyduj, co chcesz eksportować") musi zostać
 **"Tylko zarezerwowane daty"**. Druga opcja może wysyłać też ręczne zamknięcia, które wtedy
@@ -65,8 +72,11 @@ rezerwacji do 0. Jeśli to prawda (np. dwa odwołania naraz), usuń w Google wpi
 ogłoszenia, wtedy następny przebieg jest zielony. Zasady i powody są w docstringu
 skryptu, wszystkie mają testy w `tests/test_channel_sync.py`.
 
-Workflow co 15 minut odpala Cloudflare Worker z katalogu `trigger/` (cron GitHuba w praktyce
-odpala się co 4-7 h). Deploy: `cd trigger && npx wrangler deploy && npx wrangler secret put GITHUB_TOKEN`
+Workflow ma co 15 minut odpalać Cloudflare Worker z katalogu `trigger/`. **Jeszcze nie jest
+wdrożony** (brak tokenu GitHub), więc dziś działa tylko cron GitHuba, który w praktyce odpala się co
+4-11 h; tyle trwa, zanim ręczny wpis w Google zablokuje platformy. Pilną rezerwację przepchniesz od
+razu: Actions -> Sync iCal feeds -> Run workflow, potem "Odśwież połączenie" w Bookingu i "Refresh"
+przy imporcie w Airbnb. Deploy: `cd trigger && npx wrangler deploy && npx wrangler secret put GITHUB_TOKEN`
 (fine-grained PAT tylko do tego repo, uprawnienie Actions: write).
 
 Ręczna próba bez zapisu (z katalogu głównego repo):
@@ -147,7 +157,7 @@ Konfiguracja, gdyby trzeba było ją kiedyś odtworzyć:
 
 ### Monitoring: canary (`.github/workflows/uptime.yml`)
 
-Co 15 minut pobiera **żywą** stronę i sprawdza, że naprawdę serwuje willę: HTTP 200 + treść naszej strony (nie parkingu domeny ani 404 GitHuba), oba kanały `ical/*.ics` jako prawidłowy `BEGIN:VCALENDAR`, oraz certyfikat TLS ważny jeszcze ponad 14 dni.
+Co 15 minut pobiera **żywą** stronę i sprawdza, że naprawdę serwuje willę: HTTP 200 + treść naszej strony (nie parkingu domeny ani 404 GitHuba), oba kanały `ical/*.ics` i 4 importowane pliki `ical/mirror/*.ics` jako prawidłowy `BEGIN:VCALENDAR`, oraz certyfikat TLS ważny jeszcze ponad 14 dni.
 
 Jeśli przyczyną jest konfiguracja Pages w repo (wyłączone Pages, skasowana domena, zmieniona gałąź) — canary **sam ją przywraca** i strona wraca bez udziału człowieka. Run i tak kończy się na czerwono, żeby awaria została w historii Actions.
 

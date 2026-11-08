@@ -2,9 +2,9 @@ name: Sync iCal feeds
 
 on:
   schedule:
-    # Fallback only: GitHub fires this "hourly" cron every 4-7 h in practice.
-    # The real 15-minute clock is the Cloudflare Worker in trigger/, which
-    # calls workflow_dispatch.
+    # GitHub fires this "hourly" cron every 4-11 h in practice. The 15-minute
+    # clock is the Cloudflare Worker in trigger/ (workflow_dispatch) once it is
+    # deployed (README).
     - cron: '17 * * * *'
   workflow_dispatch:
     inputs:
@@ -24,6 +24,8 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    # A stalled feed download must not hold the concurrency group (default 360 min).
+    timeout-minutes: 15
     steps:
       # ref: main, not the trigger SHA: a run held by `concurrency` must start
       # from the commit the previous run pushed, or its own push is rejected.
