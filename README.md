@@ -70,7 +70,11 @@ trafią do Google jako "Booking · ..." i będą blokować Airbnb.
 Zepsuty feed nic nie kasuje: jego rezerwacje zostają w Google i dalej blokują pozostałe platformy,
 a run kończy się na czerwono (alert przez `alert-router.yml`). Ten sam alert przy spadku z >= 2
 rezerwacji do 0. Jeśli to prawda (np. dwa odwołania naraz), usuń w Google wpisy automatyczne tego
-ogłoszenia, wtedy następny przebieg jest zielony. Zasady i powody są w docstringu
+ogłoszenia, wtedy następny przebieg jest zielony. Osobny alert "calendar wipe BLOCKED" przychodzi,
+gdy z kalendarza mieszkania znikną naraz wszystkie (>= 2) przyszłe pobyty; do czasu decyzji nowe
+rezerwacje z Airbnb/Bookingu dla tego mieszkania nie trafiają do Google. Jeśli to prawda (np. dwa
+odwołania naraz), uruchom Actions -> Sync iCal feeds -> Run workflow z `confirm_wipe_apt=<mieszkanie>`.
+Zasady i powody są w docstringu
 skryptu, testy logiki są w `tests/test_channel_sync.py`.
 
 Workflow co 15 minut odpala Cloudflare Worker `villa-atlantic-sync-trigger` z katalogu `trigger/`
