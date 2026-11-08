@@ -49,7 +49,7 @@ Google Calendar jest jedynym źródłem prawdy. Krok "Sync Airbnb / Booking" w `
 
 1. pobiera eksport iCal każdego ogłoszenia (sekret `CHANNEL_ICAL_URLS`, JSON
    `{"airbnb-villa": "<url>", ...}` z dokładnie 5 kluczami z `LISTINGS` w skrypcie, łącznie z
-   `airbnb-villa`; inaczej run kończy się błędem i nic nie zapisuje) i trzyma w
+   `airbnb-villa`; inaczej krok kończy się błędem i nie zmienia ani Google, ani plików mirror) i trzyma w
    kalendarzach Google dokładnie jedno wydarzenie na rezerwację (konto
    `villa-calendar-sync@claude-cod2.iam.gserviceaccount.com`, sekret `GOOGLE_SERVICE_ACCOUNT_JSON`,
    prawo "Wprowadzanie zmian w wydarzeniach" w obu kalendarzach);
@@ -75,7 +75,7 @@ skryptu, testy logiki są w `tests/test_channel_sync.py`.
 
 Workflow co 15 minut odpala Cloudflare Worker `villa-atlantic-sync-trigger` z katalogu `trigger/`
 (konto Cloudflare `pgrzegorczyk6@gmail.com`, wdrożony 08.11.2026; cron GitHuba to tylko zapas, w
-praktyce co 4-11 h). Potem Airbnb i Booking same pobierają pliki co kilka godzin. Pilną rezerwację
+praktyce co 2-11 h). Potem Airbnb i Booking same pobierają pliki co kilka godzin. Pilną rezerwację
 przepchniesz od razu: Actions -> Sync iCal feeds -> Run workflow, potem "Odśwież połączenie" w
 Bookingu i "Refresh" przy imporcie w Airbnb.
 
@@ -83,13 +83,14 @@ Deploy (token Cloudflare z prawem Workers Scripts: Edit jest w
 `~/.config/cloudflare/villa-atlantic.env`):
 
 ```
-set -a; source ~/.config/cloudflare/villa-atlantic.env; set +a
+source ~/.config/cloudflare/villa-atlantic.env
 cd trigger && npx wrangler deploy && npx wrangler secret put GITHUB_TOKEN
 ```
 
 Sekret to fine-grained PAT `villa-atlantic-sync-trigger` (tylko to repo, Actions: Read and write,
-kopia w `~/.config/villa-atlantic/github-trigger-token`). Gdy PAT wygaśnie, Worker zgłasza błąd,
-a synchronizacja spada do crona GitHuba.
+kopia w `~/.config/villa-atlantic/github-trigger-token`). Gdy PAT przestanie działać (cofnięty),
+Worker loguje błąd tylko w Cloudflare, bez alertu, a synchronizacja po cichu spada do crona GitHuba.
+Dlatego co jakiś czas sprawdź w Actions, że runy `workflow_dispatch` idą co 15 minut.
 
 Ręczna próba bez zapisu (z katalogu głównego repo):
 
