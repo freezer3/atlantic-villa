@@ -41,7 +41,7 @@ def test_airbnb_keeps_only_reserved_and_future():
 
 def test_booking_stay_copied_by_hand_is_still_synced():
     # Mama's hand copy is in the Booking mirror; the real Booking stay on the same nights
-    # must still reach Google, or a cancellation would leave the copy blocking forever.
+    # must still reach Google, or the nights open once the hand copy is cleaned up.
     existing = {"cliffs": [gev("hand", "2026-11-20", "2026-11-26")], "gardens": []}
     feeds = {"booking-cliffs": feed(("20261120", "20261125", "CLOSED - Not available"))}
     inserts, _, mirrors, _ = plan(feeds, existing, TODAY)
@@ -50,8 +50,9 @@ def test_booking_stay_copied_by_hand_is_still_synced():
 
 
 def test_booking_echo_of_airbnb_block_heals_after_cancellation():
-    # Booking re-exports our Airbnb block; once Airbnb cancels, the echo is not served
-    # back to Booking, so Booking stops exporting it and the next run deletes it.
+    # Only if the Booking export setting is switched away from reservations-only: Booking
+    # re-exports our Airbnb block; once Airbnb cancels, the echo is not served back to
+    # Booking, so Booking stops exporting it and the next run deletes it.
     existing = {
         "cliffs": [gev("echo", "2026-11-20", "2026-11-26", "booking-cliffs")],
         "gardens": [],

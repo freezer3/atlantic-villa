@@ -25,12 +25,8 @@ Safety rules (tests in tests/test_channel_sync.py):
   of an imported calendar; syncing those back would loop.
 - Booking.com labels every event "CLOSED - Not available". The extranet export
   setting is "Tylko zarezerwowane daty" (reservations only; verified 1:1
-  against the reservation list on 08.11.2026), so every event is synced. No
-  echo filter: if someone switches the setting to "Zarezerwowane i zamknięte
-  daty", hand closures and our own imported blocks come back as events. Those
-  still fail safe (block first), and an echo heals itself: a listing's own
-  events are never mirrored back to it, so once the source is gone the block
-  leaves Booking's export and the event is deleted.
+  against the reservation list on 08.11.2026), so every event is synced.
+  Keep that setting (README); any extra closures would fail safe as blocks.
 - Checkout day: platform DTEND is the checkout day. Google events are written
   with end = checkout + 1 to match how bookings are entered by hand
   (README: "data końcowa to dzień wymeldowania"), so sanitize_ical's one-day
