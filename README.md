@@ -75,9 +75,9 @@ mieszkania, wtedy patrz niżej).
 
 Osobny alert "calendar wipe BLOCKED" przychodzi, gdy z kalendarza mieszkania znikną naraz wszystkie
 (>= 2) przyszłe pobyty. Strona i pliki mirror trzymają wtedy stary stan, ale nowe rezerwacje z
-Airbnb/Bookingu dla tego mieszkania nie trafiają do Google ani na drugą platformę, więc do decyzji
-blokuj je ręcznie. Jeśli usunięcie było przypadkiem, przywróć wpisy z Kosza w Google Calendar (daty
-podpowie `python3 scripts/restore_booking.py --report`). Jeśli było celowe (np. dwa odwołania naraz), uruchom
+Airbnb/Bookingu dla tego mieszkania nie trafiają do Google ani na drugą platformę, a nowe wpisy
+ręczne w Google nie trafiają na Airbnb/Booking, więc do decyzji blokuj je ręcznie. Jeśli usunięcie
+było przypadkiem, przywróć wpisy z Kosza w Google Calendar (daty są w alercie, linie `vanished:`). Jeśli było celowe (np. dwa odwołania naraz), uruchom
 Actions -> Sync iCal feeds -> Run workflow z `confirm_wipe_apt` = `cliffs` albo `gardens` (małymi
 literami).
 Zasady i powody są w docstringu

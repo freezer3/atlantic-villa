@@ -80,8 +80,10 @@ def _main(argv: list[str]) -> int:
     today = dt.datetime.now(ZoneInfo("Atlantic/Canary")).date()
     if is_wipe(before_text, after_text, today):
         gone = before if not after else future(before, today)
-        what = "events" if not after else "future stays"
-        print(f"WIPE: feed went from {len(gone)} {what} to 0.")
+        if after:
+            print(f"WIPE: none of the {len(gone)} future stays is left.")
+        else:
+            print(f"WIPE: feed went from {len(gone)} events to 0.")
         for uid, ev in sorted(gone.items(), key=lambda kv: (kv[1]["start"] or "", kv[0])):
             print(f"  vanished: {ev['start']} -> {ev['end']}  (uid {uid})")
         return WIPE_EXIT
