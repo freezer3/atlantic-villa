@@ -277,10 +277,16 @@ def main(argv: list[str]) -> int:
     urls = json.loads(os.environ.get("CHANNEL_ICAL_URLS") or "{}")
     feeds = {name: _fetch(urls[name]) for name in LISTINGS if urls.get(name)}
     inserts, deletes, mirrors, status = plan(feeds, existing, today)
+    # Check-in..checkout as the platforms show it (Google's end date is checkout + 1).
     for apt, body in inserts:
-        print(f"+ {apt}: {body['summary']} {body['start']['date']} -> {body['end']['date']}")
+        start, checkout = gcal_range(body)
+        print(f"+ {apt}: {body['summary']} {start}..{checkout}")
+    by_id = {ev["id"]: ev for events in existing.values() for ev in events}
     for apt, ev_id in deletes:
-        print(f"- {apt}: event {ev_id}")
+        ev = by_id[ev_id]
+        rng = gcal_range(ev)
+        dates = f"{rng[0]}..{rng[1]}" if rng else "no nights"
+        print(f"- {apt}: {source(ev)} {dates} (event {ev_id})")
     for name, state in sorted(status.items()):
         print(f"{name}: {state}")
     failed = any(state != "ok" for state in status.values())
