@@ -134,6 +134,7 @@ jobs:
             if [ "$apt" != "${CONFIRM_WIPE_APT:-}" ] \
                && ! guard_out="$(python3 scripts/sync_guard.py "ical/$apt.before.ics" "ical/$apt.candidate.ics")"; then
               echo "WIPE blocked for $apt — keeping last-good live feed."
+              echo "$guard_out"  # vanished dates (no guest data); the alert mail needs secrets
               cp "ical/$apt.candidate.ics" "ical/$apt.suspect.ics"
               # Idempotent: only alert/fail on the transition INTO the wiped
               # state. A persisting wipe keeps the last-good feed unchanged, so
@@ -251,5 +252,5 @@ jobs:
       - name: Fail run if a wipe was blocked
         if: always() && steps.sync.outputs.wipe == '1'
         run: |
-          echo "::error::A calendar wipe was blocked; the live site kept its last-good bookings. See the emailed alert."
+          echo "::error::A calendar wipe was blocked; the live site kept its last-good bookings. See the 'WIPE blocked' lines in the 'Fetch, guard, sanitize, log' step."
           exit 1

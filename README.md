@@ -73,13 +73,15 @@ rezerwacji do 0. Jeśli to prawda (np. dwa odwołania naraz), usuń w Google wpi
 ogłoszenia, wtedy następny przebieg jest zielony (chyba że to były wszystkie przyszłe pobyty
 mieszkania, wtedy patrz niżej).
 
-Osobny alert "calendar wipe BLOCKED" przychodzi, gdy z kalendarza mieszkania znikną naraz wszystkie
-(>= 2) przyszłe pobyty. Strona i pliki mirror trzymają wtedy stary stan, ale nowe rezerwacje z
+Gdy z kalendarza mieszkania znikną naraz wszystkie (>= 2) przyszłe pobyty, run też kończy się na
+czerwono (to samo issue z `alert-router.yml`; maila "calendar wipe BLOCKED" nie ma, bo repo nie ma
+sekretów pocztowych), a w logu kroku "Fetch, guard, sanitize, log" jest "WIPE blocked for <mieszkanie>" i
+linie `vanished:` z datami. Strona i pliki mirror trzymają wtedy stary stan, ale nowe rezerwacje z
 Airbnb/Bookingu dla tego mieszkania nie trafiają do Google ani na drugą platformę, a nowe wpisy
 ręczne w Google nie trafiają na Airbnb/Booking, więc do decyzji blokuj je ręcznie. Jeśli usunięcie
-było przypadkiem, przywróć wpisy z Kosza w Google Calendar (daty są w alercie, linie `vanished:`). Jeśli było celowe (np. dwa odwołania naraz), uruchom
-Actions -> Sync iCal feeds -> Run workflow z `confirm_wipe_apt` = `cliffs` albo `gardens` (małymi
-literami).
+było przypadkiem, przywróć wpisy z Kosza w Google Calendar. Jeśli było celowe (np. dwa odwołania
+naraz), uruchom Actions -> Sync iCal feeds -> Run workflow z `confirm_wipe_apt` = `cliffs` albo
+`gardens` (małymi literami).
 Zasady i powody są w docstringu
 skryptu, testy logiki są w `tests/test_channel_sync.py`.
 
@@ -165,7 +167,7 @@ Konfiguracja, gdyby trzeba było ją kiedyś odtworzyć:
 
 ### Monitoring: canary (`.github/workflows/uptime.yml`)
 
-Co 15 minut pobiera **żywą** stronę i sprawdza, że naprawdę serwuje willę: HTTP 200 + treść naszej strony (nie parkingu domeny ani 404 GitHuba), oba kanały `ical/*.ics` i 4 importowane pliki `ical/mirror/*.ics` jako prawidłowy `BEGIN:VCALENDAR`, oraz certyfikat TLS ważny jeszcze ponad 14 dni.
+Zaplanowany co 15 minut (cron GitHuba w praktyce co 3-8 h) pobiera **żywą** stronę i sprawdza, że naprawdę serwuje willę: HTTP 200 + treść naszej strony (nie parkingu domeny ani 404 GitHuba), oba kanały `ical/*.ics` i 4 importowane pliki `ical/mirror/*.ics` jako prawidłowy `BEGIN:VCALENDAR`, oraz certyfikat TLS ważny jeszcze ponad 14 dni.
 
 Jeśli przyczyną jest konfiguracja Pages w repo (wyłączone Pages, skasowana domena, zmieniona gałąź) — canary **sam ją przywraca** i strona wraca bez udziału człowieka. Run i tak kończy się na czerwono, żeby awaria została w historii Actions.
 
