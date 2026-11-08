@@ -93,31 +93,20 @@ uv run --no-project --with google-auth --with requests python scripts/channel_sy
 
 ---
 
-## Jak pierwszy raz skonfigurować kalendarze (robi to Aleksandra raz)
+## Konfiguracja kalendarzy Google (gotowa, nic tu nie trzeba robić)
 
-1. **Utwórz 2 nowe kalendarze** w Google Calendar:
-   - Ustawienia → "Dodaj kalendarz" → "Utwórz nowy kalendarz"
-   - Nazwy: `Villa Atlantic — Cliffs` i `Villa Atlantic — Gardens`
+Kalendarze Cliffs i Gardens istnieją i są podłączone. Ta sekcja przyda się tylko wtedy, gdyby
+trzeba było podłączyć je od nowa:
 
-2. **Nie udostępniaj kalendarzy publicznie**:
-   - Otwórz ustawienia kalendarza (trzy kropki → Ustawienia)
-   - "Uprawnienia dostępu" → **nie zaznaczaj** "Udostępnij publicznie"
-   - Jeśli było już włączone, odznacz "Udostępnij publicznie" i zapisz. Publiczny link iCal z historii repo nie może działać.
-
-3. **Pobierz prywatny link iCal** dla każdego kalendarza:
-   - W ustawieniach kalendarza → sekcja "Zintegruj kalendarz"
-   - Skopiuj **"Tajny adres w formacie iCal"** / **"Secret address in iCal format"**
-   - Tego linku nie wklejaj do `index.html` ani do commita.
-
-4. **Dodaj linki jako sekrety GitHub Actions**:
-   - W repo GitHub: Settings → Secrets and variables → Actions → New repository secret
-   - `CLIFFS_ICAL_URL` → prywatny link iCal dla Cliffs
-   - `GARDENS_ICAL_URL` → prywatny link iCal dla Gardens
-   - Workflow zapisuje bezpieczne pliki `ical/cliffs.ics` i `ical/gardens.ics`; strona czyta tylko je.
-
-5. **Udostępnij kalendarze mamie**:
-   - W każdym kalendarzu → Ustawienia → "Udostępnij konkretnym osobom"
-   - Dodaj email mamy z uprawnieniami "Dokonywanie zmian w wydarzeniach"
+- Kalendarze **nie mogą być publiczne** (Ustawienia kalendarza -> "Uprawnienia dostępu" ->
+  "Udostępnij publicznie" odznaczone). Publiczny link iCal z historii repo pokazywałby nazwiska
+  gości; workflow sprawdza przy każdym przebiegu, że jest wyłączony.
+- "Tajny adres w formacie iCal" każdego kalendarza (Ustawienia -> "Zintegruj kalendarz") jest
+  sekretem GitHub Actions `CLIFFS_ICAL_URL` / `GARDENS_ICAL_URL`. Nie wklejaj go do kodu ani
+  commita. Workflow zapisuje z niego oczyszczone `ical/cliffs.ics` i `ical/gardens.ics`, które czyta
+  strona.
+- Osoby, które wpisują rezerwacje, mają w obu kalendarzach "Wprowadzanie zmian w wydarzeniach";
+  konto synchronizacji z Airbnb/Booking też (sekcja wyżej).
 
 ---
 
@@ -136,10 +125,6 @@ Teksty, których nie da się zrobić rodzeństwem `data-lang` (tytuł strony, me
 Zmień tekst, zapisz, wgraj zmiany na serwer (patrz: deploy).
 
 > **Uwaga (kalendarz, lokalizacja miesięcy):** nazwy miesięcy/dni i przyciski FullCalendar biorą się z paczek lokalizacji ładowanych osobno. **Muszą** pochodzić z `@fullcalendar/core@6.1.15/locales/<lang>.global.min.js` — ścieżka `fullcalendar@6.1.15/locales/*` (bez `@fullcalendar/core`) zwraca **404** i kalendarz zostaje po angielsku.
-
-### Co do uzupełnienia przed publikacją
-
-- Sekrety `CLIFFS_ICAL_URL` i `GARDENS_ICAL_URL` w GitHub Actions → prywatne linki iCal (patrz wyżej)
 
 ---
 
