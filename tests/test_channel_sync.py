@@ -149,6 +149,24 @@ def test_looks_wiped_only_when_future_stays_vanish():
     assert not looks_wiped(site, [gev("x", "2026-11-20", "2026-11-26")], TODAY)
     assert not looks_wiped(past_only, [], TODAY)  # quiet season: first booking still syncs
     assert not looks_wiped(feed(), [], TODAY)  # confirmed wipe emptied the site feed
+    timed = (
+        "BEGIN:VCALENDAR\r\n"
+        + "".join(
+            f"BEGIN:VEVENT\r\nUID:t{i}\r\nDTSTART:{d}T150000Z\r\nDTEND:{d}T180000Z\r\nEND:VEVENT\r\n"
+            for i, d in enumerate(("20260301", "20260601"))
+        )
+        + "END:VCALENDAR\r\n"
+    )
+    assert not looks_wiped(timed, [], TODAY)  # past timed entries are not future stays
+
+
+def test_wiped_calendar_still_syncs_villa_into_the_healthy_one():
+    existing = {"cliffs": [], "gardens": []}
+    feeds = {"airbnb-villa": feed(("20261120", "20261125", "Reserved"))}
+    inserts, deletes, mirrors, status = plan(feeds, existing, TODAY, frozenset({"cliffs"}))
+    assert [apt for apt, _ in inserts] == ["gardens"] and deletes == []
+    assert status["airbnb-villa"] != "ok"  # run still goes red
+    assert "20261120" in mirrors["booking-gardens"] and "booking-cliffs" not in mirrors
 
 
 def test_synced_event_moved_to_other_calendar_is_replaced():

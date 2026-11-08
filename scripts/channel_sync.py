@@ -27,6 +27,13 @@ Safety rules (tests in tests/test_channel_sync.py):
   setting is "Tylko zarezerwowane daty" (reservations only; verified 1:1
   against the reservation list on 08.11.2026), so every event is synced.
   Keep that setting (README); any extra closures would fail safe as blocks.
+- Unknown Airbnb summaries and feeds without BEGIN/END:VCALENDAR fail the
+  listing (format drift or a truncated download), same as a failed download.
+- An apartment whose Google calendar suddenly has no future events while its
+  site feed still has >= 2 future stays looks wiped: nothing is written to that
+  calendar and its mirrors keep the last file (looks_wiped).
+- airbnb-villa gets no mirror (NO_MIRROR): Airbnb's native villa link already
+  spreads the apartment imports to the villa.
 - Checkout day: platform DTEND is the checkout day. Google events are written
   with end = checkout + 1 to match how bookings are entered by hand
   (README: "data końcowa to dzień wymeldowania"), so sanitize_ical's one-day
@@ -38,8 +45,8 @@ CLI (the sync workflow runs it after the website feed step):
 
 Env (both are repo secrets): GOOGLE_SERVICE_ACCOUNT_JSON (service-account key
 with "Make changes to events" on both calendars) and CHANNEL_ICAL_URLS, a JSON
-object {listing: export URL}. Listings without a URL still get a mirror file.
-Without the key the script prints a notice and exits 0, so the workflow keeps
+object {listing: export URL} with exactly the LISTINGS keys (else exit 1,
+nothing written). Without the key the script prints a notice and exits 0, so the workflow keeps
 working before setup.
 """
 
@@ -183,11 +190,17 @@ def mirror_ics(ranges: list[Range]) -> str:
 def looks_wiped(site_feed: str, events: list[dict], today: dt.date) -> bool:
     """Google returns no future events for a calendar whose last published site
     feed (ical/<apt>.ics, kept at last-good by the site's wipe guard) still has
-    >= 2 future stays. Same rule as sync_guard; a confirmed wipe (confirm_wipe_apt)
-    empties the site feed, so it stops counting."""
+    >= 2 future stays (sync_guard's >= 2 floor, future stays only). A confirmed
+    wipe (confirm_wipe_apt) empties the site feed, so it stops counting."""
     if events:
         return False
-    future = [ev for ev in parse_events(site_feed).values() if (ev["end"] or "") > str(today)]
+    # Timed values stay raw (20261103T070000Z), date-only ones are YYYY-MM-DD: compare digits.
+    cutoff = f"{today:%Y%m%d}"
+    future = [
+        ev
+        for ev in parse_events(site_feed).values()
+        if (ev["end"] or "").replace("-", "")[:8] > cutoff
+    ]
     return len(future) >= 2
 
 
@@ -200,8 +213,9 @@ def plan(
     """Pure core. feeds: listing -> export text, or the fetch exception
     (listings without a URL are absent). existing: apartment -> current and
     future Google events. wiped: apartments whose calendar looks wiped (see
-    looks_wiped); nothing is written for them and their mirrors keep the old
-    file. Returns (inserts [(apt, body)], deletes [(apt, id)],
+    looks_wiped); nothing is written to them and their mirrors keep the old
+    file, while a whole-villa listing still syncs the healthy apartment.
+    Returns (inserts [(apt, body)], deletes [(apt, id)],
     mirrors {listing: ics}, status {listing: "ok" | error})."""
     status: dict[str, str] = {}
     want: dict[str, set[Range]] = {}
@@ -227,15 +241,18 @@ def plan(
 
     # Refilling a wiped calendar would hide the wipe from the site's guard, and its
     # mirrors would drop every hand booking, so touch nothing there.
-    for listing in list(want):
-        if wiped & set(LISTINGS[listing][2]):
-            status[listing] = f"calendar {', '.join(sorted(wiped))} looks wiped; changed nothing"
-            del want[listing]
+    for listing in want:
+        if hit := wiped & set(LISTINGS[listing][2]):
+            status[listing] = (
+                f"calendar {', '.join(sorted(hit))} looks wiped; changed nothing there"
+            )
 
     inserts: list[tuple[str, dict]] = []
     deletes: list[tuple[str, str]] = []
     busy: dict[str, list[tuple[Range, str | None]]] = {u: [] for u in CALENDARS}
     for unit, events in existing.items():
+        if unit in wiped:
+            continue
         seen: set[tuple[str, Range]] = set()
         for ev in events:
             listing, rng = source(ev), gcal_range(ev)
