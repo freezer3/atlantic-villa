@@ -167,11 +167,11 @@ Konfiguracja, gdyby trzeba było ją kiedyś odtworzyć:
 
 ### Monitoring: canary (`.github/workflows/uptime.yml`)
 
-Zaplanowany co 15 minut (cron GitHuba w praktyce co 3-8 h) pobiera **żywą** stronę i sprawdza, że naprawdę serwuje willę: HTTP 200 + treść naszej strony (nie parkingu domeny ani 404 GitHuba), oba kanały `ical/*.ics` i 4 importowane pliki `ical/mirror/*.ics` jako prawidłowy `BEGIN:VCALENDAR`, oraz certyfikat TLS ważny jeszcze ponad 14 dni.
+Zaplanowany co 15 minut (cron GitHuba w praktyce co 2-10 h) pobiera **żywą** stronę i sprawdza, że naprawdę serwuje willę: HTTP 200 + treść naszej strony (nie parkingu domeny ani 404 GitHuba), oba kanały `ical/*.ics` i 4 importowane pliki `ical/mirror/*.ics` jako prawidłowy `BEGIN:VCALENDAR`, oraz certyfikat TLS ważny jeszcze ponad 14 dni.
 
 Jeśli przyczyną jest konfiguracja Pages w repo (wyłączone Pages, skasowana domena, zmieniona gałąź) — canary **sam ją przywraca** i strona wraca bez udziału człowieka. Run i tak kończy się na czerwono, żeby awaria została w historii Actions.
 
-**Alert = issue na GitHubie** z etykietą `uptime` **plus mail** na `ALERT_EMAIL` — tą samą akcją i tymi samymi sekretami (`MAIL_USERNAME`, `MAIL_PASSWORD`) co alerty synchronizacji kalendarzy, więc awaria strony trafia tam, gdzie już trafiają alerty o kalendarzu. Stan awarii trzyma issue: jedno otwarte issue na całą awarię, kolejne przebiegi nie duplikują ani issue, ani maila, a gdy canary zobaczy zdrową stronę, sam dopisuje komentarz i zamyka issue.
+**Alert = issue na GitHubie** z etykietą `uptime` (GitHub wysyła o nim maila). Krok mailowy wysyła się tylko, gdy repo ma `ALERT_EMAIL`, `MAIL_USERNAME` i `MAIL_PASSWORD`; dziś ich nie ma. Stan awarii trzyma issue: jedno otwarte issue na całą awarię, kolejne przebiegi nie duplikują ani issue, ani maila, a gdy canary zobaczy zdrową stronę, sam dopisuje komentarz i zamyka issue.
 
 Powód: 2026-08-02 ktoś wyłączył Pages w ustawieniach repo. DNS, TLS, sanitizer i godzinna synchronizacja kalendarzy działały dalej na zielono, a strona przez ten czas zwracała 404 GitHuba — bo nic nigdy nie pobierało żywej strony.
 
