@@ -62,4 +62,16 @@ def test_past_timed_entries_are_not_future():
         + "END:VCALENDAR\r\n"
     )
     assert future(parse_events(timed), dt.date(2026, 11, 7)) == {}
-    assert len(future(parse_events(timed), dt.date(2026, 5, 1))) == 1
+    assert future(parse_events(timed), dt.date(2026, 2, 1)) == {}  # same-day: no night
+
+
+def test_new_stay_during_a_hold_does_not_release_it():
+    later = dt.date(2026, 1, 4)  # e4, e5 ahead; both deleted, one new stay added
+    replaced = _feed(3).replace(
+        "END:VCALENDAR",
+        (
+            "BEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20260110\r\nDTEND;VALUE=DATE:20260115\r\n"
+            "UID:new@google.com\r\nEND:VEVENT\r\nEND:VCALENDAR"
+        ),
+    )
+    assert is_wipe(_feed(5), replaced, later) is True

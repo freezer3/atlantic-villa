@@ -10,12 +10,13 @@ double-bookings.
 The guard trips on either condition, per feed:
 
     previous feed had >= 2 events         AND  new feed has 0 events
-    previous feed had >= 2 future stays   AND  new feed has 0 future stays
+    previous feed had >= 2 future stays   AND  none of them (by UID) is left
 
-The second catches every upcoming booking deleted while past ones remain
-(future = ends after today on the Canary Islands, the same for both feeds, so
-time passing never trips it; it also means a wipe left unconfirmed stops being
-held once fewer than 2 of the held stays are still ahead). Anything else
+The second catches every upcoming booking deleted while past ones remain, also
+when a new booking arrives during the hold (matched by UID, not counted).
+Future stay = at least one night, ending after today on the Canary Islands;
+the same day for both feeds, so time passing never trips it, but a wipe left
+unconfirmed stops being held once fewer than 2 held stays are still ahead. Anything else
 publishes normally: a single checkout (1 -> 0), partial change (2 -> 1),
 additions, reorders. The 2+ floor avoids tripping on a calendar that only ever
 had one booking.
@@ -41,21 +42,30 @@ from sanitize_ical import parse_events
 WIPE_EXIT = 3
 
 
+def _day(value: str | None) -> str:
+    # Timed values stay raw (20261103T070000Z), date-only ones are YYYY-MM-DD.
+    return (value or "").replace("-", "")[:8]
+
+
 def future(events: dict[str, dict], today: dt.date) -> dict[str, dict]:
-    """Events ending after today. Timed values stay raw (20261103T070000Z) and
-    date-only ones are YYYY-MM-DD, so compare digits only."""
+    """Stays with at least one night that end after today (the sanitized feed's
+    all-day end is the checkout day; a same-day timed entry has no night)."""
     cutoff = f"{today:%Y%m%d}"
     return {
-        uid: ev for uid, ev in events.items() if (ev["end"] or "").replace("-", "")[:8] > cutoff
+        uid: ev
+        for uid, ev in events.items()
+        if _day(ev["end"]) > cutoff and _day(ev["end"]) > _day(ev["start"])
     }
 
 
 def is_wipe(before_text: str, after_text: str, today: dt.date) -> bool:
-    """True iff all events, or all future stays, went from >= 2 to 0."""
+    """True iff all events went from >= 2 to 0, or none of >= 2 future stays
+    is left (by UID)."""
     before, after = parse_events(before_text), parse_events(after_text)
     if len(before) >= 2 and not after:
         return True
-    return len(future(before, today)) >= 2 and not future(after, today)
+    held = future(before, today)
+    return len(held) >= 2 and not held.keys() & after.keys()
 
 
 def _main(argv: list[str]) -> int:

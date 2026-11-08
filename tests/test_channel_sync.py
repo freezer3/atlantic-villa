@@ -146,7 +146,7 @@ def test_looks_wiped_only_when_future_stays_vanish():
     site = feed(("20261120", "20261125", "Booked"), ("20261201", "20261203", "Booked"))
     past_only = feed(("20260301", "20260305", "Booked"), ("20260601", "20260605", "Booked"))
     assert looks_wiped(site, [], TODAY)
-    assert not looks_wiped(site, [gev("x", "2026-11-20", "2026-11-26")], TODAY)
+    assert not looks_wiped(site, [dict(gev("x", "2026-11-20", "2026-11-26"), iCalUID="0@x")], TODAY)
     assert not looks_wiped(past_only, [], TODAY)  # quiet season: first booking still syncs
     assert not looks_wiped(feed(), [], TODAY)  # confirmed wipe emptied the site feed
     timed = (
@@ -160,6 +160,16 @@ def test_looks_wiped_only_when_future_stays_vanish():
     assert not looks_wiped(timed, [], TODAY)  # past timed entries are not future stays
     leftovers = [gev("out", "2026-11-03", "2026-11-08"), gev("note", "2026-11-20", "2026-11-21")]
     assert looks_wiped(site, leftovers, TODAY)  # checkout today + one-day note hide nothing
+    assert looks_wiped(site, [dict(gev("new", "2027-01-10", "2027-01-16"), iCalUID="n@x")], TODAY)
+    notes = (
+        "BEGIN:VCALENDAR\r\n"
+        + "".join(
+            f"BEGIN:VEVENT\r\nUID:n{i}\r\nDTSTART:{d}T090000Z\r\nDTEND:{d}T110000Z\r\nEND:VEVENT\r\n"
+            for i, d in enumerate(("20261120", "20261203"))
+        )
+        + "END:VCALENDAR\r\n"
+    )
+    assert not looks_wiped(notes, [], TODAY)  # same-day timed notes are not stays
 
 
 def test_wiped_calendar_still_syncs_villa_into_the_healthy_one():

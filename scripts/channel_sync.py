@@ -29,8 +29,8 @@ Safety rules (tests in tests/test_channel_sync.py):
   Keep that setting (README); any extra closures would fail safe as blocks.
 - Unknown Airbnb summaries and feeds without BEGIN/END:VCALENDAR fail the
   listing (format drift or a truncated download), same as a failed download.
-- An apartment whose Google calendar suddenly has no future events while its
-  site feed still has >= 2 future stays looks wiped: nothing is written to that
+- An apartment whose Google calendar no longer holds any of the >= 2 future
+  stays in its site feed looks wiped: nothing is written to that
   calendar and its mirrors keep the last file (looks_wiped).
 - airbnb-villa gets no mirror (NO_MIRROR): Airbnb's native villa link already
   spreads the apartment imports to the villa.
@@ -189,14 +189,14 @@ def mirror_ics(ranges: list[Range]) -> str:
 
 
 def looks_wiped(site_feed: str, events: list[dict], today: dt.date) -> bool:
-    """Google has no stay ending after today in a calendar whose last published
-    site feed (ical/<apt>.ics, kept at last-good by sync_guard) still has >= 2.
-    Same night rule as sync_guard.future, so a checkout-today stay or a one-day
-    note left behind does not hide the wipe. Holds until confirm_wipe_apt
-    publishes the new feed, or until all but one held stay has checked out."""
-    if any((rng := gcal_range(ev)) and rng[1] > today for ev in events):
-        return False
-    return len(future(parse_events(site_feed), today)) >= 2
+    """None of the >= 2 future stays in the last published site feed
+    (ical/<apt>.ics, kept at last-good by sync_guard) is still in Google,
+    matched by UID like sync_guard.is_wipe (site UID = Google iCalUID, checked
+    live 08.11.2026). Leftover or newly added events do not hide the wipe. Holds
+    until confirm_wipe_apt publishes the new feed, or until fewer than 2 held
+    stays are still ahead."""
+    held = future(parse_events(site_feed), today)
+    return len(held) >= 2 and not held.keys() & {ev.get("iCalUID") for ev in events}
 
 
 def plan(
