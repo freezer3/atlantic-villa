@@ -7,13 +7,16 @@ held real bookings suddenly returns *zero* events from Google (someone deleted
 everything, or the feed broke). Publishing that empties the site and invites
 double-bookings.
 
-The guard trips on exactly one condition, per feed:
+The guard trips on either condition, per feed:
 
-    previous feed had >= 2 events  AND  new feed has 0 events
+    previous feed had >= 2 events         AND  new feed has 0 events
+    previous feed had >= 2 future stays   AND  new feed has 0 future stays
 
-Anything else publishes normally: a single checkout (1 -> 0), partial change
-(2 -> 1), additions, reorders. The 2+ floor avoids tripping on a calendar that
-only ever had one booking.
+The second catches every upcoming booking deleted while past ones remain
+(future = ends after today on the Canary Islands, the same for both feeds, so
+time passing never trips it). Anything else publishes normally: a single
+checkout (1 -> 0), partial change (2 -> 1), additions, reorders. The 2+ floor
+avoids tripping on a calendar that only ever had one booking.
 
 CLI (used by the sync workflow):
 
@@ -26,19 +29,31 @@ into the alert email).
 
 from __future__ import annotations
 
+import datetime as dt
 import pathlib
 import sys
+from zoneinfo import ZoneInfo
 
 from sanitize_ical import parse_events
 
 WIPE_EXIT = 3
 
 
-def is_wipe(before_text: str, after_text: str) -> bool:
-    """True iff the before feed had >= 2 events and the after feed has 0."""
-    before = parse_events(before_text)
-    after = parse_events(after_text)
-    return len(before) >= 2 and len(after) == 0
+def future(events: dict[str, dict], today: dt.date) -> dict[str, dict]:
+    """Events ending after today. Timed values stay raw (20261103T070000Z) and
+    date-only ones are YYYY-MM-DD, so compare digits only."""
+    cutoff = f"{today:%Y%m%d}"
+    return {
+        uid: ev for uid, ev in events.items() if (ev["end"] or "").replace("-", "")[:8] > cutoff
+    }
+
+
+def is_wipe(before_text: str, after_text: str, today: dt.date) -> bool:
+    """True iff all events, or all future stays, went from >= 2 to 0."""
+    before, after = parse_events(before_text), parse_events(after_text)
+    if len(before) >= 2 and not after:
+        return True
+    return len(future(before, today)) >= 2 and not future(after, today)
 
 
 def _main(argv: list[str]) -> int:
@@ -50,9 +65,12 @@ def _main(argv: list[str]) -> int:
     after_text = after_path.read_text(encoding="utf-8") if after_path.exists() else ""
     before = parse_events(before_text)
     after = parse_events(after_text)
-    if len(before) >= 2 and len(after) == 0:
-        print(f"WIPE: feed went from {len(before)} events to 0.")
-        for uid, ev in sorted(before.items(), key=lambda kv: (kv[1]["start"] or "", kv[0])):
+    today = dt.datetime.now(ZoneInfo("Atlantic/Canary")).date()
+    if is_wipe(before_text, after_text, today):
+        gone = before if not after else future(before, today)
+        what = "events" if not after else "future stays"
+        print(f"WIPE: feed went from {len(gone)} {what} to 0.")
+        for uid, ev in sorted(gone.items(), key=lambda kv: (kv[1]["start"] or "", kv[0])):
             print(f"  vanished: {ev['start']} -> {ev['end']}  (uid {uid})")
         return WIPE_EXIT
     print(f"OK: {len(before)} -> {len(after)} events.")

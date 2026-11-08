@@ -46,8 +46,8 @@ CLI (the sync workflow runs it after the website feed step):
 Env (both are repo secrets): GOOGLE_SERVICE_ACCOUNT_JSON (service-account key
 with "Make changes to events" on both calendars) and CHANNEL_ICAL_URLS, a JSON
 object {listing: export URL} with exactly the LISTINGS keys (else exit 1,
-nothing written). Without the key the script prints a notice and exits 0, so the workflow keeps
-working before setup.
+nothing written). Without GOOGLE_SERVICE_ACCOUNT_JSON the script prints a
+notice and exits 0.
 """
 
 from __future__ import annotations
@@ -62,6 +62,7 @@ import urllib.request
 from zoneinfo import ZoneInfo
 
 from sanitize_ical import parse_events
+from sync_guard import future
 
 CALENDARS = {
     "cliffs": "b2a835e6bed7c0910197c6510d83e2183cd6a0ef16dc04db27d6126d82f53f8b"
@@ -190,18 +191,11 @@ def mirror_ics(ranges: list[Range]) -> str:
 def looks_wiped(site_feed: str, events: list[dict], today: dt.date) -> bool:
     """Google returns no future events for a calendar whose last published site
     feed (ical/<apt>.ics, kept at last-good by the site's wipe guard) still has
-    >= 2 future stays (sync_guard's >= 2 floor, future stays only). A confirmed
-    wipe (confirm_wipe_apt) empties the site feed, so it stops counting."""
+    >= 2 future stays. sync_guard keeps the site feed at last-good when its future
+    stays vanish, so this holds until confirm_wipe_apt publishes the new feed."""
     if events:
         return False
-    # Timed values stay raw (20261103T070000Z), date-only ones are YYYY-MM-DD: compare digits.
-    cutoff = f"{today:%Y%m%d}"
-    future = [
-        ev
-        for ev in parse_events(site_feed).values()
-        if (ev["end"] or "").replace("-", "")[:8] > cutoff
-    ]
-    return len(future) >= 2
+    return len(future(parse_events(site_feed), today)) >= 2
 
 
 def plan(
